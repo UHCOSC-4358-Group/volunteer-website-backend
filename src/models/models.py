@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, ValidationError
 from enum import Enum
 from datetime import datetime
 
@@ -19,19 +19,20 @@ class NotificationType(str, Enum):
 
 class Event(BaseModel):
     id: int
-    name: str = Field(min_length=5, max_length=60)
+    name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
     location: str
     required_skills: list[str]
-    urgency: str
+    urgency: UrgencyLevel
     assigned: int
     capacity: int
+    created_by: int
     org_id: int
 
 
 class Org(BaseModel):
     id: int
-    name: str = Field(min_length=5, max_length=60)
+    name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
     image_url: str
 
@@ -49,12 +50,51 @@ class Volunteer(BaseModel):
     id: int
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
+    description: str = Field(min_length=10, max_length=800)
+    image_url: str
     location: str
     skills: list[str]
 
 
 class Notification(BaseModel):
     id: int
-    type: str
+    type: NotificationType
     text: str = Field(min_length=5, max_length=200)
     time: datetime
+
+
+# This one is for creating events, so POST /:orgId/events
+class EventCreate(BaseModel):
+    name: str = Field(min_length=5, max_length=100)
+    description: str = Field(min_length=10, max_length=800)
+    location: str
+    required_skills: list[str]
+    urgency: UrgencyLevel
+    capacity: int
+    created_by: int
+    org_id: int
+
+    @field_validator("capacity")
+    def capacity_positive(cls, v):
+        if v <= 0:
+            raise ValueError("Capacity must be positive")
+        return v
+
+
+# This is for creating admins,
+# usually done before they assign themselves to an org or create one
+# ex. POST /admin/signup
+class AdminCreate(BaseModel):
+    first_name: str = Field(min_length=1, max_length=40)
+    last_name: str = Field(min_length=1, max_length=40)
+    description: str = Field(min_length=10, max_length=800)
+    image_url: str
+
+
+# For creating Volunteers
+# ex. POST /vol/signup
+class VolunteerCreate(BaseModel):
+    first_name: str = Field(min_length=1, max_length=40)
+    last_name: str = Field(min_length=1, max_length=40)
+    location: str
+    skills: list[str]
