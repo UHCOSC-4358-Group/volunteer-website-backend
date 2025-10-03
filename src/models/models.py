@@ -1,0 +1,60 @@
+from pydantic import BaseModel, Field
+from enum import Enum
+from datetime import datetime
+
+
+class UrgencyLevel(str, Enum):
+    LOW = "Low"
+    MEDIUM = "Medium"
+    HIGH = "High"
+    CRITICAL = "Critical"
+
+
+class NotificationType(str, Enum):
+    EVENT_ASSIGNMENT = "event_assignment"
+    EVENT_REMINDER = "event_reminder"
+    SKILL_MATCH = "skill_match"
+    SYSTEM_UPDATE = "system_update"
+
+
+class Event(BaseModel):
+    id: int
+    name: str = Field(min_length=5, max_length=60)
+    description: str = Field(min_length=10, max_length=800)
+    location: str
+    required_skills: list[str]
+    urgency: str
+    assigned: int
+    capacity: int
+    org_id: int
+
+
+class Org(BaseModel):
+    id: int
+    name: str = Field(min_length=5, max_length=60)
+    description: str = Field(min_length=10, max_length=800)
+    image_url: str
+
+
+class OrgAdmin(BaseModel):
+    id: int
+    org_id: int | None
+    first_name: str = Field(min_length=1, max_length=40)
+    last_name: str = Field(min_length=1, max_length=40)
+    description: str = Field(min_length=10, max_length=800)
+    image_url: str
+
+
+class Volunteer(BaseModel):
+    id: int
+    first_name: str = Field(min_length=1, max_length=40)
+    last_name: str = Field(min_length=1, max_length=40)
+    location: str
+    skills: list[str]
+
+
+class Notification(BaseModel):
+    id: int
+    type: str
+    text: str = Field(min_length=5, max_length=200)
+    time: datetime
