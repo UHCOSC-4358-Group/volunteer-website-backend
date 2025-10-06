@@ -1,6 +1,10 @@
-from pydantic import BaseModel, Field, field_validator, ValidationError
+from pydantic import BaseModel, Field, field_validator, EmailStr
 from enum import Enum
 from datetime import datetime
+
+
+# TODO: CHANGE INTO SQLALCHEMY MODELS
+# Our Pydantic models will be in the same
 
 
 class UrgencyLevel(str, Enum):
@@ -85,6 +89,8 @@ class EventCreate(BaseModel):
 # usually done before they assign themselves to an org or create one
 # ex. POST /admin/signup
 class AdminCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=20)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
@@ -94,6 +100,8 @@ class AdminCreate(BaseModel):
 # For creating Volunteers
 # ex. POST /vol/signup
 class VolunteerCreate(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=20)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     location: str
