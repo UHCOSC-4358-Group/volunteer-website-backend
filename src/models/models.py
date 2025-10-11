@@ -43,7 +43,7 @@ class Org(BaseModel):
 
 class OrgAdmin(BaseModel):
     id: str  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
-    org_id: int | str | None  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
+    org_id: str | None = None  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
     email: str = Field(min_length=1, max_length=80)
     password: str = Field(min_length=1, max_length=40)
     first_name: str = Field(min_length=1, max_length=40)
