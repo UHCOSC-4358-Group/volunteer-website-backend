@@ -37,15 +37,10 @@ def get_db():
 # Create our CRUD functions which pass in the database instance being used
 # I'll create some ones we'll need, including some of the params
 
-VolunteerCreate
-
 
 # CREATE Volunteer obj
 # Check the obj for expected params ^^^
 def create_volunteer(db, volunteer: VolunteerCreate): ...
-
-
-AdminCreate
 
 
 # CREATE OrgAdmin obj

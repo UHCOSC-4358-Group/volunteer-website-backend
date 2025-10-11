@@ -13,13 +13,13 @@ Should we handle refreshing? idk
 from bcrypt import hashpw, gensalt, checkpw
 from fastapi import Request, Response, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from os import environ
+import os
 import time
 import jwt
 
 
-JWT_SECRET = environ["JWT_SECRET"]
-ALGORITHM = environ["JWT_ALGORITHM"]
+JWT_SECRET = os.environ.get("JWT_SECRET")
+ALGORITHMS = ["HS256"]
 SALT_ROUNDS = 12
 
 
@@ -38,14 +38,15 @@ def verify_password(plaintext_pw: str, hashed_pw: str) -> bool:
 # Signs the JWT string
 def sign_JWT(userId: str, response: Response):
     payload = {"userId": userId, "expiry": time.time() + 3600}
-    token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHM)
+    token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie("access_token", token, httponly=True)
+    response.status_code = 201
     return response
 
 
 def decodeJWT(token: str):
     try:
-        decoded_token = jwt.decode(token, JWT_SECRET, algorithms=[ALGORITHM])
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms=ALGORITHMS)
         return decoded_token if decoded_token["expiry"] >= time.time() else None
     except:
         return {}

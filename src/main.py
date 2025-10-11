@@ -1,11 +1,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
+
+load_dotenv(dotenv_path=find_dotenv())
 
 # Routers
-from routers import auth
-
-load_dotenv()
+from .routers import auth
 
 app = FastAPI(
     title="Volunteer Website API",

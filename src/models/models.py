@@ -22,7 +22,7 @@ class NotificationType(str, Enum):
 
 
 class Event(BaseModel):
-    id: int
+    id: str
     name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
     location: str
@@ -35,15 +35,17 @@ class Event(BaseModel):
 
 
 class Org(BaseModel):
-    id: int
+    id: str  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
     name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
     image_url: str
 
 
 class OrgAdmin(BaseModel):
-    id: int
-    org_id: int | None
+    id: str  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
+    org_id: int | str | None  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
+    email: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=1, max_length=40)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
@@ -51,7 +53,9 @@ class OrgAdmin(BaseModel):
 
 
 class Volunteer(BaseModel):
-    id: int
+    id: str  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
+    email: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=1, max_length=120)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
@@ -104,5 +108,7 @@ class VolunteerCreate(BaseModel):
     password: str = Field(min_length=8, max_length=20)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
+    description: str = Field(min_length=10, max_length=800)
+    image_url: str
     location: str
     skills: list[str]
