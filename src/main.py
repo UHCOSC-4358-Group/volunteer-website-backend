@@ -5,7 +5,7 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(dotenv_path=find_dotenv())
 
 # Routers
-from .routers import auth
+from .routers import auth, event
 
 app = FastAPI(
     title="Volunteer Website API",
@@ -22,7 +22,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# /auth
 app.include_router(auth.router)
+
+# /event
+app.include_router(event.router)
 
 
 # All sign up methods should return a id, making it

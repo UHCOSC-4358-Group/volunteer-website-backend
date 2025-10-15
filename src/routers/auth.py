@@ -4,7 +4,8 @@ from ..models.models import VolunteerCreate, Volunteer, AdminCreate, OrgAdmin
 from ..dependencies.auth import (
     hash_password,
     verify_password,
-    sign_JWT,
+    sign_JWT_volunteer,
+    sign_JWT_admin,
     get_current_user,
 )
 from uuid import uuid4
@@ -78,7 +79,7 @@ async def volunteer_signup(user: VolunteerCreate, response: Response):
         skills=user.skills,
     )
     VOLUNTEER_DUMMY_DATA.append(new_volunteer)
-    sign_JWT(new_volunteer.id, response)
+    sign_JWT_volunteer(new_volunteer.id, response)
     return {
         "message": f"Volunteer {new_volunteer.first_name} {new_volunteer.last_name} has been created!"
     }
@@ -102,7 +103,7 @@ async def volunteer_login(login_data: LoginData, response: Response):
     if not verify_password(login_data.password, found_volunteer.password):
         raise HTTPException(400, "User or password incorrect!")
 
-    sign_JWT(found_volunteer.id, response)
+    sign_JWT_volunteer(found_volunteer.id, response)
     return {
         "message": f"Volunteer {found_volunteer.first_name} {found_volunteer.last_name} has been logged in!"
     }
@@ -122,7 +123,7 @@ async def admin_signup(user: AdminCreate, response: Response):
         image_url=user.image_url,
     )
     ADMIN_DUMMY_DATA.append(new_admin)
-    sign_JWT(new_admin.id, response)
+    sign_JWT_admin(new_admin.id, response)
     return {
         "message": f"Admin {new_admin.first_name} {new_admin.last_name} has been created!"
     }
@@ -141,7 +142,7 @@ async def admin_login(login_data: LoginData, response: Response):
     if not verify_password(login_data.password, found_admin.password):
         raise HTTPException(400, "User or password incorrect!")
 
-    sign_JWT(found_admin.id, response)
+    sign_JWT_admin(found_admin.id, response)
     return {
         "message": f"Admin {found_admin.first_name} {found_admin.last_name} has been logged in!"
     }

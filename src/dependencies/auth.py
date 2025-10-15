@@ -10,6 +10,7 @@ If pass, then we return a token with user's data
 Should we handle refreshing? idk
 """
 
+from enum import Enum
 from bcrypt import hashpw, gensalt, checkpw
 from fastapi import Request, Response, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -36,11 +37,17 @@ def verify_password(plaintext_pw: str, hashed_pw: str) -> bool:
 
 
 # Signs the JWT string
-def sign_JWT(userId: str, response: Response):
-    payload = {"userId": userId, "expiry": time.time() + 3600}
+def sign_JWT_admin(userId: str, response: Response):
+    payload = {"userId": userId, "expires": time.time() + 3600, "userType": "admin"}
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie("access_token", token, httponly=True)
-    response.status_code = 201
+    return response
+
+
+def sign_JWT_volunteer(userId: str, response: Response):
+    payload = {"userId": userId, "expires": time.time() + 3600, "userType": "volunteer"}
+    token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
+    response.set_cookie("access_token", token, httponly=True)
     return response
 
 

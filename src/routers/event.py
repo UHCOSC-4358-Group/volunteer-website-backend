@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends
-from ..models.models import EventCreate
+from ..models.models import EventCreate, Event
 from ..dependencies.auth import get_current_user
+
+
+EVENT_DUMMY_DATA: list[Event] = []
 
 router = APIRouter(prefix="/event", tags=["event"])
 
@@ -14,7 +17,9 @@ async def get_event(event_id: str): ...
 # TODO: CREATE EVENT CREATION ENDPOINT
 # CRITERIA: MUST BE AUTHED, AND MUST BE AN ADMIN
 @router.post("/create")
-async def create_event(event: EventCreate, user_id=Depends(get_current_user)): ...
+async def create_event(event: EventCreate, user_id=Depends(get_current_user)):
+    # User_id must be an admin, and must be in that org
+    ...
 
 
 # TODO: CREATE EVENT UPDATE ENDPOINT
