@@ -1,16 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, find_dotenv
+from dependencies.database import db_init_lifecycle
 
 load_dotenv(dotenv_path=find_dotenv())
 
 # Routers
 from .routers import auth, event
 
+
 app = FastAPI(
     title="Volunteer Website API",
     description="Backend API for volunteer website",
     version="1.0.0",
+    lifespan=db_init_lifecycle,
 )
 
 # Configure CORS
@@ -21,6 +24,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 
 # /auth
 app.include_router(auth.router)
