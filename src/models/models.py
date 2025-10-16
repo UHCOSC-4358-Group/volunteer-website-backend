@@ -28,9 +28,19 @@ class Event(BaseModel):
     location: str
     required_skills: list[str]
     urgency: UrgencyLevel
-    assigned: int
+    assigned: int = 0
     capacity: int
-    org_id: int
+    org_id: str
+
+
+class EventUpdate(BaseModel):
+    name: str | None
+    description: str | None
+    location: str | None
+    required_skills: list[str] | None
+    urgency: UrgencyLevel | None
+    assigned: int | None
+    capacity: int | None
 
 
 class Org(BaseModel):
@@ -78,7 +88,6 @@ class EventCreate(BaseModel):
     required_skills: list[str]
     urgency: UrgencyLevel
     capacity: int
-    created_by: int
 
     @field_validator("capacity")
     def capacity_positive(cls, v):
