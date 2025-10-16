@@ -30,7 +30,6 @@ class Event(BaseModel):
     urgency: UrgencyLevel
     assigned: int
     capacity: int
-    created_by: int
     org_id: int
 
 
@@ -80,7 +79,6 @@ class EventCreate(BaseModel):
     urgency: UrgencyLevel
     capacity: int
     created_by: int
-    org_id: int
 
     @field_validator("capacity")
     def capacity_positive(cls, v):

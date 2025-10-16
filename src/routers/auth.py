@@ -7,6 +7,9 @@ from ..dependencies.auth import (
     sign_JWT_volunteer,
     sign_JWT_admin,
     get_current_user,
+    is_admin,
+    is_volunteer,
+    UserTokenInfo,
 )
 from uuid import uuid4
 
@@ -58,7 +61,38 @@ VOLUNTEER_DUMMY_DATA: list[Volunteer] = [
     ),
 ]
 
-ADMIN_DUMMY_DATA: list[OrgAdmin] = []
+ADMIN_DUMMY_DATA: list[OrgAdmin] = [
+    OrgAdmin(
+        id="admin-550e8400-e29b-41d4-a716-446655440001",
+        org_id="org-550e8400-e29b-41d4-a716-446655440001",
+        email="jennifer.smith@redcross.org",
+        password=hash_password("adminpass123"),
+        first_name="Jennifer",
+        last_name="Smith",
+        description="Regional coordinator with 8 years of experience managing disaster relief operations and volunteer programs across Texas.",
+        image_url="https://example.com/profiles/jennifer.jpg",
+    ),
+    OrgAdmin(
+        id="admin-550e8400-e29b-41d4-a716-446655440002",
+        org_id="org-550e8400-e29b-41d4-a716-446655440002",
+        email="david.kumar@foodbank.org",
+        password=hash_password("foodbank2024"),
+        first_name="David",
+        last_name="Kumar",
+        description="Operations manager specializing in food distribution logistics and community outreach programs for underserved populations.",
+        image_url="https://example.com/profiles/david.jpg",
+    ),
+    OrgAdmin(
+        id="admin-550e8400-e29b-41d4-a716-446655440003",
+        org_id="org-550e8400-e29b-41d4-a716-446655440003",
+        email="lisa.torres@codeforchange.org",
+        password=hash_password("techvolunteer99"),
+        first_name="Lisa",
+        last_name="Torres",
+        description="Tech nonprofit director focused on digital literacy education and bridging the technology gap in underserved communities.",
+        image_url="https://example.com/profiles/lisa.jpg",
+    ),
+]
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -149,13 +183,34 @@ async def admin_login(login_data: LoginData, response: Response):
 
 
 @router.get("/vol")
-async def get_volunteer(user_id=Depends(get_current_user)):
-    volunteer: Volunteer | None = None
+async def get_volunteer(user_info: UserTokenInfo = Depends(get_current_user)):
+    found_volunteer: Volunteer | None = None
+
+    if not is_volunteer(user_info):
+        raise HTTPException(401, detail="User is not a volunteer!")
+
     for vol in VOLUNTEER_DUMMY_DATA:
-        if vol.id == user_id:
-            volunteer = vol
+        if vol.id == user_info.user_id:
+            found_volunteer = vol
 
-    if volunteer is None:
-        raise HTTPException(status_code=400, detail="User not found!")
+    if found_volunteer is None:
+        raise HTTPException(status_code=400, detail="Volunteer not found!")
 
-    return volunteer
+    return found_volunteer
+
+
+@router.get("/admin")
+async def get_admin(user_info: UserTokenInfo = Depends(get_current_user)):
+    found_admin: OrgAdmin | None = None
+
+    if not is_admin(user_info):
+        raise HTTPException(401, detail="User is not an admin!")
+
+    for admin in ADMIN_DUMMY_DATA:
+        if admin.id == user_info.user_id:
+            found_admin = admin
+
+    if found_admin is None:
+        raise HTTPException(status_code=400, detail="Organization admin not found!")
+
+    return found_admin

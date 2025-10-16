@@ -10,8 +10,8 @@ If pass, then we return a token with user's data
 Should we handle refreshing? idk
 """
 
-from enum import Enum
 from bcrypt import hashpw, gensalt, checkpw
+from pydantic import BaseModel
 from fastapi import Request, Response, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
@@ -90,13 +90,30 @@ class JWTBearer(HTTPBearer):
         return isTokenValid
 
 
+class UserTokenInfo(BaseModel):
+    user_id: str | None
+    user_type: str | None
+
+
 async def get_current_user(token: str = Depends(JWTBearer())):
     payload = decodeJWT(token)
     if not payload:
         raise HTTPException(status_code=403, detail="Invalid or Expired token!")
 
-    user_id = payload.get("userId")
+    user_id: str | None = payload.get("userId")
+    user_type: str | None = payload.get("userType")
     if not user_id:
         raise HTTPException(status_code=403, detail="Invalid token payload!")
 
-    return user_id
+    # Create new user token info object
+
+    user_token_info = UserTokenInfo(user_id=user_id, user_type=user_type)
+    return user_token_info
+
+
+def is_admin(user_info: UserTokenInfo):
+    return user_info.user_type == "admin"
+
+
+def is_volunteer(user_info: UserTokenInfo):
+    return user_info.user_type == "volunteer"
