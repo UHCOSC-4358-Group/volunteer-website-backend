@@ -177,3 +177,10 @@ async def delete_event(
     EVENT_DUMMY_DATA.pop(index)
 
     return {"message": "Event deleted successfully!"}
+
+
+# TODO: Create endpoint for assigning volunteer to event
+@router.post("/{event_id}/signup")
+async def event_volunteer_signup(
+    event_id: str, user_info: UserTokenInfo = Depends(get_current_user)
+): ...

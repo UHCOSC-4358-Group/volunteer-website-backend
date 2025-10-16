@@ -1,8 +1,13 @@
 # Where we handle DB session / CRUD methods
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base
-import os
+from fastapi import FastAPI, Request
 from ..models.models import VolunteerCreate, AdminCreate
+from ..models.dbmodels import Base
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker, Session
+import os
+
 
 # Just simple setup stuff here, we want to make it so our db connection isn't a singleton
 # Instead we make an engine our singleton, which can create a session per request
@@ -11,36 +16,50 @@ from ..models.models import VolunteerCreate, AdminCreate
 # As for our chosen postgreSQL db, i recommend Supabase's free tier, sounds like a good deal
 # If you need schema examples, here's a link
 
-SQLALCHEMY_DATABASE_URL = "YOUR_POSTGRES_URL_HERE"
-PRODUCTION_MODE = True if os.environ["PROD"] == "TRUE" else False
 
-# Once we implement our db, then we can uncomment these lines
-"""
-# engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
-# SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-# Inherit from this base for the data models
-Base = declarative_base()
-"""
+def build_sessionmaker(db_url: str):
+    engine = create_engine(db_url, pool_pre_ping=True)
+    SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+    return engine, SessionLocal
 
 
-def get_db():
-    if not PRODUCTION_MODE:
-        return None
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # settings.database_url should come from env/config
+    url = os.getenv("SQLALCHEMY_DATABASE_URL")
+    if url is None:
+        raise RuntimeError("SQL URL not set")
 
-    # db = SessionLocal()
-    # try:
-    #     yield db
-    # finally:
-    #     db.close()
+    engine, SessionLocal = build_sessionmaker(url)
+
+    Base.metadata.create_all(engine)
+
+    app.state.engine = engine
+    app.state.SessionLocal = SessionLocal
+    try:
+        yield
+    finally:
+        engine.dispose()
 
 
-# Create our CRUD functions which pass in the database instance being used
-# I'll create some ones we'll need, including some of the params
+app = FastAPI(lifespan=lifespan)
 
 
-# CREATE Volunteer obj
-# Check the obj for expected params ^^^
-def create_volunteer(db, volunteer: VolunteerCreate): ...
+# Dependency: per-request Session, no globals
+def get_db(request: Request):
+    SessionLocal = request.app.state.SessionLocal
+    db: Session = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+# Example repo-style usage
+def create_volunteer(db: Session, data: VolunteerCreate): ...
+
+
+# ... perform db operations ...
 
 
 # CREATE OrgAdmin obj
