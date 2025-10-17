@@ -82,7 +82,6 @@ async def create_event(
         required_skills=event.required_skills,
         urgency=event.urgency,
         capacity=event.capacity,
-        assigned=event.capacity,
         org_id=org_id,
     )
 

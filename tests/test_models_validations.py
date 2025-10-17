@@ -8,7 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 # Import model definitions
-from src.models.models import EventCreate, AdminCreate, VolunteerCreate
+from src.models.models import EventCreate, AdminCreate, VolunteerCreate, UrgencyLevel
 
 
 def test_event_create_capacity_must_be_positive():
@@ -22,7 +22,7 @@ def test_event_create_capacity_must_be_positive():
             description="Long enough description here",
             location="Here",
             required_skills=["A"],
-            urgency="Low",
+            urgency=UrgencyLevel.LOW,
             capacity=0,  # invalid
         )
 

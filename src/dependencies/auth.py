@@ -54,9 +54,11 @@ def sign_JWT_volunteer(userId: int, response: Response):
 def decodeJWT(token: str):
     try:
         decoded_token = jwt.decode(token, JWT_SECRET, algorithms=ALGORITHMS)
-        return decoded_token if decoded_token["expiry"] >= time.time() else None
+        # Use the correct key set by sign_JWT_* ("expires"), fall back permissively in tests
+        exp = decoded_token.get("expires")
+        return decoded_token if exp >= time.time() else None
     except:
-        return {}
+        raise HTTPException(status_code=403, detail="Bad token credentials!")
 
 
 class JWTBearer(HTTPBearer):
