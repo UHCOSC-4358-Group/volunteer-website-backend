@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, find_dotenv
-from dependencies.database import lifespan
+from .dependencies.database.config import lifespan
 
 load_dotenv(dotenv_path=find_dotenv())
 

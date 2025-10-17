@@ -54,7 +54,7 @@ class OrgAdmin(BaseModel):
     id: str  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
     org_id: str | None = None  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
     email: str = Field(min_length=1, max_length=80)
-    password: str = Field(min_length=1, max_length=40)
+    password: str = Field(min_length=1, max_length=255)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
@@ -64,7 +64,7 @@ class OrgAdmin(BaseModel):
 class Volunteer(BaseModel):
     id: str  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
     email: str = Field(min_length=1, max_length=80)
-    password: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1, max_length=255)
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)

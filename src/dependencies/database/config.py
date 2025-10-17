@@ -1,7 +1,7 @@
 # Where we handle DB session / CRUD methods
 from fastapi import FastAPI, Request
-from ..models.models import VolunteerCreate, AdminCreate
-from ..models.dbmodels import Base
+from ...models.models import VolunteerCreate, AdminCreate
+from ...models.dbmodels import Base
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from sqlalchemy import create_engine
@@ -25,12 +25,19 @@ def build_sessionmaker(db_url: str):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # settings.database_url should come from env/config
-    url = os.getenv("SQLALCHEMY_DATABASE_URL")
-    if url is None:
+
+    USER = os.getenv("SUPABASE_USER")
+    PASSWORD = os.getenv("SUPABASE_PASSWORD")
+    HOST = os.getenv("SUPABASE_HOST")
+    PORT = os.getenv("SUPABASE_PORT")
+    DB_NAME = os.getenv("SUPABASE_DB_NAME")
+
+    if None in [USER, PASSWORD, HOST, PORT, DB_NAME]:
         raise RuntimeError("SQL URL not set")
 
-    engine, SessionLocal = build_sessionmaker(url)
+    DATABASE_URL = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}?sslmode=require"
+
+    engine, SessionLocal = build_sessionmaker(DATABASE_URL)
 
     Base.metadata.create_all(engine)
 
@@ -53,15 +60,3 @@ def get_db(request: Request):
         yield db
     finally:
         db.close()
-
-
-# Example repo-style usage
-def create_volunteer(db: Session, data: VolunteerCreate): ...
-
-
-# ... perform db operations ...
-
-
-# CREATE OrgAdmin obj
-# Check the obj for expected params ^^^
-def create_org_admin(db, volunteer: AdminCreate): ...

@@ -11,6 +11,9 @@ from ..dependencies.auth import (
     is_volunteer,
     UserTokenInfo,
 )
+from sqlalchemy.orm import Session
+from ..dependencies.database.config import get_db
+from ..dependencies.database.crud import create_volunteer
 from uuid import uuid4
 
 # Sample volunteer data for testing
@@ -98,24 +101,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/vol/signup")
-async def volunteer_signup(user: VolunteerCreate, response: Response):
-    id = str(uuid4())
-    password = hash_password(user.password)
-    new_volunteer = Volunteer(
-        id=id,
-        password=password,
-        email=user.email,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        description=user.description,
-        image_url=user.image_url,
-        location=user.location,
-        skills=user.skills,
-    )
-    VOLUNTEER_DUMMY_DATA.append(new_volunteer)
-    sign_JWT_volunteer(new_volunteer.id, response)
+async def volunteer_signup(
+    user: VolunteerCreate, response: Response, db: Session = Depends(get_db)
+):
+    user.password = hash_password(user.password)
+
+    volunteer_obj = create_volunteer(db, user)
+    sign_JWT_volunteer(int(str(volunteer_obj.id)), response)
     return {
-        "message": f"Volunteer {new_volunteer.first_name} {new_volunteer.last_name} has been created!"
+        "message": f"Volunteer {volunteer_obj.first_name} {volunteer_obj.last_name} with id {int(str(volunteer_obj.id))} has been created!"
     }
 
 

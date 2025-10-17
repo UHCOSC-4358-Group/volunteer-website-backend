@@ -37,14 +37,14 @@ def verify_password(plaintext_pw: str, hashed_pw: str) -> bool:
 
 
 # Signs the JWT string
-def sign_JWT_admin(userId: str, response: Response):
+def sign_JWT_admin(userId: int, response: Response):
     payload = {"userId": userId, "expires": time.time() + 3600, "userType": "admin"}
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie("access_token", token, httponly=True)
     return response
 
 
-def sign_JWT_volunteer(userId: str, response: Response):
+def sign_JWT_volunteer(userId: int, response: Response):
     payload = {"userId": userId, "expires": time.time() + 3600, "userType": "volunteer"}
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie("access_token", token, httponly=True)
@@ -91,7 +91,7 @@ class JWTBearer(HTTPBearer):
 
 
 class UserTokenInfo(BaseModel):
-    user_id: str | None
+    user_id: int | None
     user_type: str | None
 
 
@@ -100,9 +100,9 @@ async def get_current_user(token: str = Depends(JWTBearer())):
     if not payload:
         raise HTTPException(status_code=403, detail="Invalid or Expired token!")
 
-    user_id: str | None = payload.get("userId")
+    user_id: int | None = payload.get("userId")
     user_type: str | None = payload.get("userType")
-    if not user_id:
+    if not user_id or not user_type:
         raise HTTPException(status_code=403, detail="Invalid token payload!")
 
     # Create new user token info object

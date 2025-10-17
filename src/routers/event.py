@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
 from ..models.models import EventCreate, Event, EventUpdate, UrgencyLevel
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin
 from uuid import uuid4
@@ -46,7 +45,7 @@ EVENT_DUMMY_DATA: list[Event] = [
     ),
 ]
 
-router = APIRouter(prefix="events/", tags=["event"])
+router = APIRouter(prefix="/events", tags=["event"])
 
 
 # CRITERIA: None, anyone can retrieve event data
