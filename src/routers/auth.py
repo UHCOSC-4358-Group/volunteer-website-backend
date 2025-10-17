@@ -13,7 +13,14 @@ from ..dependencies.auth import (
 )
 from sqlalchemy.orm import Session
 from ..dependencies.database.config import get_db
-from ..dependencies.database.crud import create_volunteer
+from ..dependencies.database.crud import (
+    create_volunteer,
+    create_org_admin,
+    get_volunteer_login,
+    get_admin_login,
+    get_current_volunteer,
+    get_current_admin,
+)
 from uuid import uuid4
 
 # Sample volunteer data for testing
@@ -119,92 +126,79 @@ class LoginData(BaseModel):
 
 
 @router.post("/vol/login")
-async def volunteer_login(login_data: LoginData, response: Response):
-    found_volunteers = [
-        vol for vol in VOLUNTEER_DUMMY_DATA if login_data.email == vol.email
-    ]
-    if len(found_volunteers) == 0:
-        raise HTTPException(400, "User or password incorrect!")
-    # just grab the first one for now
-    found_volunteer = found_volunteers[0]
+async def volunteer_login(
+    login_data: LoginData, response: Response, db: Session = Depends(get_db)
+):
+    found_volunteer = get_volunteer_login(db, login_data.email)
 
-    if not verify_password(login_data.password, found_volunteer.password):
-        raise HTTPException(400, "User or password incorrect!")
+    if found_volunteer is None:
+        raise HTTPException(401, "User email or password incorrect!")
 
-    sign_JWT_volunteer(found_volunteer.id, response)
+    if not verify_password(login_data.password, str(found_volunteer.password)):
+        raise HTTPException(401, "User or password incorrect!")
+
+    sign_JWT_volunteer(int(str(found_volunteer.id)), response)
     return {
         "message": f"Volunteer {found_volunteer.first_name} {found_volunteer.last_name} has been logged in!"
     }
 
 
 @router.post("/org/signup")
-async def admin_signup(user: AdminCreate, response: Response):
-    id = str(uuid4())
-    password = hash_password(user.password)
-    new_admin = OrgAdmin(
-        id=id,
-        password=password,
-        email=user.email,
-        first_name=user.first_name,
-        last_name=user.last_name,
-        description=user.description,
-        image_url=user.image_url,
-    )
-    ADMIN_DUMMY_DATA.append(new_admin)
-    sign_JWT_admin(new_admin.id, response)
+async def admin_signup(
+    user: AdminCreate, response: Response, db: Session = Depends(get_db)
+):
+    user.password = hash_password(user.password)
+    admin_obj = create_org_admin(db, user)
+    sign_JWT_admin(int(str(admin_obj.id)), response)
     return {
-        "message": f"Admin {new_admin.first_name} {new_admin.last_name} has been created!"
+        "message": f"Admin {admin_obj.first_name} {admin_obj.last_name} with id {int(str(admin_obj.id))} has been created!"
     }
 
 
 @router.post("/org/login")
-async def admin_login(login_data: LoginData, response: Response):
-    found_admins = [
-        admin for admin in ADMIN_DUMMY_DATA if login_data.email == admin.email
-    ]
-    if len(found_admins) == 0:
-        raise HTTPException(400, "User or password incorrect!")
-    # just grab the first one for now
-    found_admin = found_admins[0]
+async def admin_login(
+    login_data: LoginData, response: Response, db: Session = Depends(get_db)
+):
+    found_admin = get_admin_login(db, login_data.email)
 
-    if not verify_password(login_data.password, found_admin.password):
-        raise HTTPException(400, "User or password incorrect!")
+    if found_admin is None:
+        raise HTTPException(401, "User or password incorrect!")
 
-    sign_JWT_admin(found_admin.id, response)
+    if not verify_password(login_data.password, str(found_admin.password)):
+        raise HTTPException(401, "User or password incorrect!")
+
+    sign_JWT_admin(int(str(found_admin.id)), response)
     return {
         "message": f"Admin {found_admin.first_name} {found_admin.last_name} has been logged in!"
     }
 
 
 @router.get("/vol")
-async def get_volunteer(user_info: UserTokenInfo = Depends(get_current_user)):
-    found_volunteer: Volunteer | None = None
-
+async def get_volunteer(
+    user_info: UserTokenInfo = Depends(get_current_user), db: Session = Depends(get_db)
+):
     if not is_volunteer(user_info):
-        raise HTTPException(401, detail="User is not a volunteer!")
+        raise HTTPException(403, detail="User is not a volunteer!")
 
-    for vol in VOLUNTEER_DUMMY_DATA:
-        if vol.id == user_info.user_id:
-            found_volunteer = vol
+    found_volunteer = get_current_volunteer(db, user_info.user_id)
 
+    # Shouldn't happen...
     if found_volunteer is None:
-        raise HTTPException(status_code=400, detail="Volunteer not found!")
+        raise HTTPException(status_code=404, detail="Volunteer not found!")
 
     return found_volunteer
 
 
 @router.get("/admin")
-async def get_admin(user_info: UserTokenInfo = Depends(get_current_user)):
-    found_admin: OrgAdmin | None = None
-
+async def get_admin(
+    user_info: UserTokenInfo = Depends(get_current_user), db: Session = Depends(get_db)
+):
     if not is_admin(user_info):
-        raise HTTPException(401, detail="User is not an admin!")
+        raise HTTPException(403, detail="User is not an admin!")
 
-    for admin in ADMIN_DUMMY_DATA:
-        if admin.id == user_info.user_id:
-            found_admin = admin
+    found_admin = get_current_admin(db, user_info.user_id)
 
     if found_admin is None:
-        raise HTTPException(status_code=400, detail="Organization admin not found!")
+        raise HTTPException(status_code=404, detail="Organization admin not found!")
 
     return found_admin

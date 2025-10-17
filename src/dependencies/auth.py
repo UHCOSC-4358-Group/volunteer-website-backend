@@ -91,8 +91,8 @@ class JWTBearer(HTTPBearer):
 
 
 class UserTokenInfo(BaseModel):
-    user_id: int | None
-    user_type: str | None
+    user_id: int
+    user_type: str
 
 
 async def get_current_user(token: str = Depends(JWTBearer())):

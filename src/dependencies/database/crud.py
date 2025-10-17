@@ -1,4 +1,6 @@
 from typing import Iterable
+from fastapi import HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels, models
@@ -33,4 +35,54 @@ def create_volunteer(db: Session, new_volunteer: models.VolunteerCreate):
 
 # CREATE OrgAdmin obj
 # Check the obj for expected params ^^^
-def create_org_admin(db: Session, new_admin: models.AdminCreate): ...
+def create_org_admin(db: Session, new_admin: models.AdminCreate):
+
+    admin = dbmodels.OrgAdmin(
+        email=new_admin.email,
+        password=new_admin.password,
+        first_name=new_admin.first_name,
+        last_name=new_admin.last_name,
+        description=new_admin.description,
+        image_url=new_admin.image_url,
+    )
+
+    db.add(admin)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise
+    db.refresh(admin)
+    return admin
+
+
+def get_volunteer_login(db: Session, email: str):
+    query = select(dbmodels.Volunteer).where(dbmodels.Volunteer.email == email)
+
+    volunteer_login = db.execute(query).scalar_one_or_none()
+
+    return volunteer_login
+
+
+def get_admin_login(db: Session, email: str):
+    query = select(dbmodels.OrgAdmin).where(dbmodels.OrgAdmin.email == email)
+
+    admin_login = db.execute(query).scalar_one_or_none()
+
+    return admin_login
+
+
+def get_current_volunteer(db: Session, id: int):
+    query = select(dbmodels.Volunteer).where(dbmodels.Volunteer.id == id)
+
+    current_volunteer = db.execute(query).scalar_one_or_none()
+
+    return current_volunteer
+
+
+def get_current_admin(db: Session, id: int):
+    query = select(dbmodels.OrgAdmin).where(dbmodels.OrgAdmin.id == id)
+
+    current_admin = db.execute(query).scalar_one_or_none()
+
+    return current_admin
