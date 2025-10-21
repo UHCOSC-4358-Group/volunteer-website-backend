@@ -58,7 +58,7 @@ def create_org_admin(db: Session, new_admin: models.AdminCreate):
 def get_volunteer_login(db: Session, email: str):
     query = select(dbmodels.Volunteer).where(dbmodels.Volunteer.email == email)
 
-    volunteer_login = db.execute(query).scalar_one_or_none()
+    volunteer_login: dbmodels.Volunteer | None = db.execute(query).scalar_one_or_none()
 
     return volunteer_login
 
@@ -66,55 +66,60 @@ def get_volunteer_login(db: Session, email: str):
 def get_admin_login(db: Session, email: str):
     query = select(dbmodels.OrgAdmin).where(dbmodels.OrgAdmin.email == email)
 
-    admin_login = db.execute(query).scalar_one_or_none()
+    admin_login: dbmodels.OrgAdmin | None = db.execute(query).scalar_one_or_none()
 
     return admin_login
 
 
 def get_current_volunteer(db: Session, id: int):
-    query = select(dbmodels.Volunteer).where(dbmodels.Volunteer.id == id)
 
-    current_volunteer = db.execute(query).scalar_one_or_none()
+    current_volunteer = db.get(dbmodels.Volunteer, id)
 
     return current_volunteer
 
 
 def get_current_admin(db: Session, id: int):
-    query = select(dbmodels.OrgAdmin).where(dbmodels.OrgAdmin.id == id)
 
-    current_admin = db.execute(query).scalar_one_or_none()
+    current_admin = db.get(dbmodels.OrgAdmin, id)
 
     return current_admin
 
 
-def get_event(db: Session, id: int):
-    query = select(dbmodels.Event).where(dbmodels.Event.id == id)
+def get_event_from_id(db: Session, id: int):
 
-    event = db.execute(query).scalar_one_or_none()
+    event = db.get(dbmodels.Event, id)
 
     return event
 
 
-def create_event(db: Session, event: models.EventCreate, id: int):
+def create_org_event(db: Session, event: models.EventCreate):
 
-    admin = get_current_admin(db, id)
-
-    if admin is None:
-        return None
+    urgency = models.EventUrgency(getattr(event.urgency, "value", event.urgency))
 
     new_event = dbmodels.Event(
         name=event.name,
         description=event.description,
-        location=event.description,
-        urgency=event.urgency,
+        location=event.location,
+        urgency=urgency,
         capacity=event.capacity,
+        org_id=event.org_id,
     )
 
-    skills: Iterable[str] = getattr(new_event, "needed_skills", None) or []
+    skills: Iterable[str] = getattr(event, "needed_skills", None) or []
     for s in {s.strip() for s in skills if s and s.strip()}:
         new_event.needed_skills.append(dbmodels.EventSkill(skill=s))
 
-    db.add(new_event)
+    organization = db.execute(
+        select(dbmodels.Organization).where(
+            dbmodels.Organization.id == new_event.org_id
+        )
+    ).scalar_one_or_none()
+
+    if organization is None:
+        return None
+
+    organization.events.append(new_event)
+
     try:
         db.commit()
     except IntegrityError:
@@ -122,3 +127,65 @@ def create_event(db: Session, event: models.EventCreate, id: int):
         raise
     db.refresh(new_event)
     return new_event
+
+
+def update_event_helper(old_event: dbmodels.Event, event_updates: models.EventUpdate):
+    if event_updates.name is not None:
+        old_event.name = event_updates.name
+
+    if event_updates.description is not None:
+        old_event.description = event_updates.description
+
+    if event_updates.location is not None:
+        old_event.location = event_updates.location
+
+    if event_updates.required_skills is not None:
+        skills = {
+            s.strip()
+            for s in event_updates.required_skills
+            if s and isinstance(s, str) and s.strip()
+        }
+        old_event.needed_skills = [dbmodels.EventSkill(skill=s) for s in sorted(skills)]
+    # Accepts both Enum and string values
+    if event_updates.urgency is not None:
+        u = getattr(event_updates.urgency, "value", event_updates.urgency)
+
+        old_event.urgency = models.EventUrgency(u)
+
+    if event_updates.capacity is not None:
+        if event_updates.capacity < old_event.assigned:
+            raise ValueError(
+                "Capacity cannot be less than currently assigned volunteers"
+            )
+        if event_updates.capacity < 0:
+            raise ValueError("Capacity cannot be negative!")
+        old_event.capacity = event_updates.capacity
+
+    return old_event
+
+
+def update_org_event(
+    db: Session, found_event: dbmodels.Event, event_updates: models.EventUpdate
+):
+
+    new_event = update_event_helper(found_event, event_updates)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise
+    db.refresh(new_event)
+    return new_event
+
+
+def delete_org_event(db: Session, event: dbmodels.Event):
+
+    db.delete(event)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return False
+    return True

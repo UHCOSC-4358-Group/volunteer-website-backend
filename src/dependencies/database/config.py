@@ -1,6 +1,5 @@
 # Where we handle DB session / CRUD methods
 from fastapi import FastAPI, Request
-from ...models.models import VolunteerCreate, AdminCreate
 from ...models.dbmodels import Base
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
@@ -47,9 +46,6 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         engine.dispose()
-
-
-app = FastAPI(lifespan=lifespan)
 
 
 # Dependency: per-request Session, no globals

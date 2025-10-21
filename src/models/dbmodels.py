@@ -9,7 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import List
-from enum import Enum as PythonEnum
+from .models import EventUrgency
 
 Base = declarative_base()
 
@@ -94,13 +94,6 @@ class OrgAdmin(Base):
     )
     # Many-to-one: OrgAdmin -> Organization
     organization: Mapped["Organization"] = relationship(back_populates="admins")
-
-
-class EventUrgency(PythonEnum):
-    LOW = "Low"
-    MEDIUM = "Medium"
-    HIGH = "High"
-    CRITICAL = "Critical"
 
 
 class Event(Base):

@@ -114,9 +114,9 @@ async def volunteer_signup(
     user.password = hash_password(user.password)
 
     volunteer_obj = create_volunteer(db, user)
-    sign_JWT_volunteer(int(str(volunteer_obj.id)), response)
+    sign_JWT_volunteer(volunteer_obj.id, response)
     return {
-        "message": f"Volunteer {volunteer_obj.first_name} {volunteer_obj.last_name} with id {int(str(volunteer_obj.id))} has been created!"
+        "message": f"Volunteer {volunteer_obj.first_name} {volunteer_obj.last_name} with id {volunteer_obj.id} has been created!"
     }
 
 
@@ -134,10 +134,10 @@ async def volunteer_login(
     if found_volunteer is None:
         raise HTTPException(401, "User email or password incorrect!")
 
-    if not verify_password(login_data.password, str(found_volunteer.password)):
+    if not verify_password(login_data.password, found_volunteer.password):
         raise HTTPException(401, "User or password incorrect!")
 
-    sign_JWT_volunteer(int(str(found_volunteer.id)), response)
+    sign_JWT_volunteer(found_volunteer.id, response)
     return {
         "message": f"Volunteer {found_volunteer.first_name} {found_volunteer.last_name} has been logged in!"
     }
@@ -149,9 +149,9 @@ async def admin_signup(
 ):
     user.password = hash_password(user.password)
     admin_obj = create_org_admin(db, user)
-    sign_JWT_admin(int(str(admin_obj.id)), response)
+    sign_JWT_admin(admin_obj.id, response)
     return {
-        "message": f"Admin {admin_obj.first_name} {admin_obj.last_name} with id {int(str(admin_obj.id))} has been created!"
+        "message": f"Admin {admin_obj.first_name} {admin_obj.last_name} with id {admin_obj.id} has been created!"
     }
 
 
@@ -164,10 +164,10 @@ async def admin_login(
     if found_admin is None:
         raise HTTPException(401, "User or password incorrect!")
 
-    if not verify_password(login_data.password, str(found_admin.password)):
+    if not verify_password(login_data.password, found_admin.password):
         raise HTTPException(401, "User or password incorrect!")
 
-    sign_JWT_admin(int(str(found_admin.id)), response)
+    sign_JWT_admin(found_admin.id, response)
     return {
         "message": f"Admin {found_admin.first_name} {found_admin.last_name} has been logged in!"
     }

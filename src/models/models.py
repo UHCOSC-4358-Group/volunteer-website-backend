@@ -7,7 +7,7 @@ from datetime import datetime
 # Our Pydantic models will be in the same
 
 
-class UrgencyLevel(str, Enum):
+class EventUrgency(str, Enum):
     LOW = "Low"
     MEDIUM = "Medium"
     HIGH = "High"
@@ -27,7 +27,7 @@ class Event(BaseModel):
     description: str = Field(min_length=10, max_length=800)
     location: str
     required_skills: list[str]
-    urgency: UrgencyLevel
+    urgency: EventUrgency
     assigned: int = 0
     capacity: int
     org_id: str
@@ -38,8 +38,7 @@ class EventUpdate(BaseModel):
     description: str | None
     location: str | None
     required_skills: list[str] | None
-    urgency: UrgencyLevel | None
-    assigned: int | None
+    urgency: EventUrgency | None
     capacity: int | None
 
 
@@ -85,9 +84,10 @@ class EventCreate(BaseModel):
     name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
     location: str
-    required_skills: list[str]
-    urgency: UrgencyLevel
+    needed_skills: list[str]
+    urgency: EventUrgency
     capacity: int
+    org_id: int
 
     @field_validator("capacity")
     def capacity_positive(cls, v):

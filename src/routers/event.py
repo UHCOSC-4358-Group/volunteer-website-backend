@@ -1,153 +1,96 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from ..models.models import EventCreate, Event, EventUpdate, UrgencyLevel
+from sqlalchemy.orm import Session
+from ..models.models import EventCreate, EventUpdate
+from ..models.dbmodels import Event, EventSkill
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin
-from uuid import uuid4
-
-
-EVENT_DUMMY_DATA: list[Event] = [
-    Event(
-        id="evt-550e8400-e29b-41d4-a716-446655440001",
-        name="Community Food Drive Setup",
-        description="Help set up tables, sort donations, and organize food items for weekend distribution to local families in need.",
-        location="Austin Community Center, 123 Main St, Austin, TX",
-        required_skills=["Event Planning", "Food Service", "Heavy Lifting"],
-        urgency=UrgencyLevel.MEDIUM,
-        assigned=3,
-        capacity=8,
-        org_id="1",
-    ),
-    Event(
-        id="evt-550e8400-e29b-41d4-a716-446655440002",
-        name="Emergency Disaster Relief",
-        description="Urgent response needed for flood relief efforts including cleanup, supply distribution, and temporary shelter assistance.",
-        location="Emergency Response Center, Houston, TX",
-        required_skills=[
-            "First Aid",
-            "Crisis Management",
-            "Heavy Lifting",
-            "Transportation",
-        ],
-        urgency=UrgencyLevel.CRITICAL,
-        assigned=2,
-        capacity=15,
-        org_id="2",
-    ),
-    Event(
-        id="evt-550e8400-e29b-41d4-a716-446655440003",
-        name="Youth Coding Workshop",
-        description="Teach basic programming concepts to middle school students using interactive games and projects.",
-        location="Seattle Public Library, Tech Center Room",
-        required_skills=["Programming", "Teaching", "Patience with Kids"],
-        urgency=UrgencyLevel.LOW,
-        assigned=1,
-        capacity=4,
-        org_id="3",
-    ),
-]
+from ..dependencies.database.config import get_db
+from ..dependencies.database.crud import (
+    get_current_admin,
+    create_org_event,
+    get_event_from_id,
+    update_org_event,
+    delete_org_event,
+)
 
 router = APIRouter(prefix="/events", tags=["event"])
 
 
 # CRITERIA: None, anyone can retrieve event data
 @router.get("/{event_id}")
-async def get_event(event_id: str):
-    found_events = [event for event in EVENT_DUMMY_DATA if event_id == event.id]
-    if len(found_events) == 0:
-        raise HTTPException(404, "Event not found!")
+async def get_event(event_id: int, db: Session = Depends(get_db)):
+    found_event = get_event_from_id(db, event_id)
 
-    found_event = found_events[0]
+    if found_event is None:
+        raise HTTPException(404, f"Event with id {event_id} not found!")
 
     return found_event
 
 
 # CRITERIA: MUST BE AUTHED, AND MUST BE AN ADMIN
-@router.post("/create/{org_id}", status_code=status.HTTP_201_CREATED)
+@router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_event(
-    org_id: str,
     event: EventCreate,
     user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     # User_id must be an admin, and must be in that org
     if not is_admin(user_info):
-        raise HTTPException(401, "User is not an admin!")
+        raise HTTPException(403, "Event could not be created. User is not an admin!")
 
-    # TODO: Check if admin belongs to organization
-    # SELECT id FROM users WHERE org_id == users.org_id smth like that
+    found_admin = get_current_admin(db, user_info.user_id)
 
-    new_event = Event(
-        id=str(uuid4()),
-        name=event.name,
-        description=event.description,
-        location=event.location,
-        required_skills=event.required_skills,
-        urgency=event.urgency,
-        capacity=event.capacity,
-        org_id=org_id,
-    )
+    if found_admin is None:
+        raise HTTPException(
+            403, "Event could not be created. Authenticated user not found!"
+        )
 
-    EVENT_DUMMY_DATA.append(new_event)
+    if found_admin.org_id != event.org_id:
+        raise HTTPException(
+            403, "Event could not be created. Admin is not part of organization!"
+        )
 
-    return {"message": "Event successfully created!"}
+    new_event = create_org_event(db, event)
+
+    if new_event is None:
+        raise HTTPException(
+            400, "Event could not be created. Database could not verify transaction"
+        )
+
+    return {"message": f"Event '{new_event.name}' successfully created!"}
 
 
 # CRITERIA: MUST BE AUTHED, AND ADMIN MUST BE APART OF ORG THAT EVENT IS UNDER
-
-
-# Handles logic for updating event object
-def update_event_helper(old_event: Event, event_updates: EventUpdate) -> Event:
-    if event_updates.name is not None:
-        old_event.name = event_updates.name
-
-    if event_updates.description is not None:
-        old_event.description = event_updates.description
-
-    if event_updates.location is not None:
-        old_event.location = event_updates.location
-
-    if event_updates.required_skills is not None:
-        old_event.required_skills = event_updates.required_skills
-
-    if event_updates.urgency is not None:
-        old_event.urgency = event_updates.urgency
-
-    if event_updates.capacity is not None:
-        if event_updates.capacity < old_event.assigned:
-            raise ValueError(
-                "Capacity cannot be less than currently assigned volunteers"
-            )
-        old_event.capacity = event_updates.capacity
-
-    if event_updates.assigned is not None:
-        old_event.assigned = event_updates.assigned
-
-    return Event.model_validate(old_event)
-
-
 @router.patch("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def update_event(
-    event_id: str,
+    event_id: int,
     event_updates: EventUpdate,
     user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     # User_id must be an admin, and must be in that org
     if not is_admin(user_info):
         raise HTTPException(401, "User is not an admin!")
 
-    # TODO: Check if admin belongs to organization
-    # SELECT id FROM users WHERE org_id == users.org_id smth like that
+    found_admin = get_current_admin(db, user_info.user_id)
 
-    found_events = [event for event in EVENT_DUMMY_DATA if event.id == event_id]
+    if found_admin is None:
+        raise HTTPException(
+            403, "Event could not be updated. Authenticated user not found!"
+        )
 
-    if len(found_events) == 0:
-        raise HTTPException(404, detail="Event not found!")
+    found_event = get_event_from_id(db, event_id)
 
-    found_event = found_events[0]
+    if found_event is None:
+        raise HTTPException(404, "Event could not be updated. Event not found!")
 
-    updated_event = update_event_helper(found_event, event_updates)
+    if found_admin.org_id != found_event.org_id:
+        raise HTTPException(
+            403, "Event could not be updated. Admin is not part of organization!"
+        )
 
-    print(updated_event)
+    updated_event = update_org_event(db, found_event, event_updates)
 
-    return {"message": "Event updated successfully!"}
+    return {"message": f"Event '{updated_event.name}' updated successfully!"}
 
 
 # CRITERIA: MUST BE AUTHED, AND ADMIN MUST BE APART OF ORG THAT EVENT IS UNDER
@@ -155,24 +98,33 @@ async def update_event(
 
 @router.delete("/{event_id}")
 async def delete_event(
-    event_id: str, user_info: UserTokenInfo = Depends(get_current_user)
+    event_id: int,
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     # User_id must be an admin, and must be in that org
     if not is_admin(user_info):
         raise HTTPException(401, "User is not an admin!")
 
-    # TODO: Check if admin belongs to organization
-    # SELECT id FROM users WHERE org_id == users.org_id smth like that
+    found_admin = get_current_admin(db, user_info.user_id)
 
-    index = -1
-    for idx, event in enumerate(EVENT_DUMMY_DATA):
-        if event_id == event.id:
-            index = idx
+    if found_admin is None:
+        raise HTTPException(
+            403, "Event could not be updated. Authenticated user not found!"
+        )
 
-    if index == -1:
-        raise HTTPException(404, "Event not found!")
+    found_event = get_event_from_id(db, event_id)
 
-    EVENT_DUMMY_DATA.pop(index)
+    if found_event is None:
+        raise HTTPException(404, "Event could not be updated. Event not found!")
+
+    if found_admin.org_id != found_event.org_id:
+        raise HTTPException(
+            403, "Event could not be updated. Admin is not part of organization!"
+        )
+
+    if not delete_org_event(db, found_event):
+        raise HTTPException(500, "Event could not be deleted. DB error.")
 
     return {"message": "Event deleted successfully!"}
 
