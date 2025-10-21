@@ -11,6 +11,31 @@ import pytest
 from fastapi import FastAPI, HTTPException, status
 from fastapi.testclient import TestClient
 from types import SimpleNamespace
+from sqlalchemy import create_engine, event as sqla_event
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from src.models.dbmodels import Base
+
+
+@pytest.fixture(scope="session")
+def _test_engine():
+    # One in-memory DB shared across the process
+
+    engine = create_engine(
+        "sqlite+pysqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
+
+    @sqla_event.listens_for(engine, "connect")
+    def _enable_sqlite_fk(dbapi_conn, _):
+        dbapi_conn.execute("PRAGMA foreign_keys=ON")
+
+    Base.metadata.create_all(engine)
+
+    return engine
+
 
 # Ensure project root on path so 'src.*' imports work when running from repo root
 _THIS_DIR = os.path.dirname(__file__)
@@ -261,11 +286,17 @@ def app():
     app.include_router(auth_router_mod.router)
     app.include_router(event_router_mod.router)
 
-    # Override DB dependency so tests don't require lifespan/SessionLocal
-    def _fake_get_db():
-        yield None
+    SessionLocal = sessionmaker(bind=_test_engine(), expire_on_commit=False)
 
-    app.dependency_overrides[real_get_db] = _fake_get_db
+    # Override DB dependency so tests don't require lifespan/SessionLocal
+    def _get_db():
+        db = SessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[real_get_db] = _get_db
 
     # Default to unauthenticated; per-test fixtures will switch roles
     _set_unauth_overrides(app)

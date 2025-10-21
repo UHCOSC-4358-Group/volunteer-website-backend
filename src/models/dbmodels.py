@@ -112,7 +112,6 @@ class Event(Base):
     urgency: Mapped[EventUrgency] = mapped_column(
         SAEnum(EventUrgency, name="event_urgency_type"),
         default=EventUrgency.LOW,
-        server_default=text("'Low'::event_urgency_type"),
         nullable=False,
     )
     assigned: Mapped[int] = mapped_column(
