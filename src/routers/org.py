@@ -7,10 +7,10 @@ from ..dependencies.database.crud import (
     get_org_from_id,
     get_current_admin,
     create_new_org,
-    org_admin_signup,
     delete_org,
     update_org,
 )
+from ..dependencies.database.relations import signup_org_admin
 
 router = APIRouter(prefix="/org", tags=["org"])
 
@@ -47,7 +47,7 @@ async def create_org(
         new_org = create_new_org(db, org)
 
         # We wanna sign up the person who made the organization
-        if not org_admin_signup(db, new_org.id, found_admin.id):
+        if not signup_org_admin(db, new_org.id, found_admin.id):
             raise HTTPException(500, "Database error")
 
         return new_org

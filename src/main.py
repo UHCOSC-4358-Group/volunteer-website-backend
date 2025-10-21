@@ -12,7 +12,7 @@ from .util.error import (
 load_dotenv(dotenv_path=find_dotenv())
 
 # Routers
-from .routers import auth, event
+from .routers import auth, event, org
 
 
 app = FastAPI(
@@ -43,6 +43,9 @@ app.include_router(auth.router)
 
 # /event
 app.include_router(event.router)
+
+# /org
+app.include_router(org.router)
 
 
 # All sign up methods should return a id, making it

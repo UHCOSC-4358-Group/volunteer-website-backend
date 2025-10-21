@@ -153,27 +153,6 @@ def update_org(
     return updated_org
 
 
-def org_admin_signup(db: Session, org_id: int, admin_id: int):
-    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
-
-    if found_admin is None:
-        return False
-
-    found_org = db.get(dbmodels.Organization, org_id)
-
-    if found_org is None:
-        return False
-
-    found_org.admins.append(found_admin)
-
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        return False
-    return True
-
-
 def get_event_from_id(db: Session, id: int):
 
     event = db.get(dbmodels.Event, id)
@@ -181,6 +160,7 @@ def get_event_from_id(db: Session, id: int):
     return event
 
 
+# This could be in relations, but I want to keep event CRUD logic together
 def create_org_event(db: Session, event: pydanticmodels.EventCreate):
 
     urgency = pydanticmodels.EventUrgency(

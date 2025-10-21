@@ -1,14 +1,19 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..models.pydanticmodels import EventCreate, EventUpdate
-from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin
+from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin, is_volunteer
 from ..dependencies.database.config import get_db
 from ..dependencies.database.crud import (
     get_current_admin,
     create_org_event,
-    get_event_from_id,
     update_org_event,
     delete_org_event,
+    get_event_from_id,
+)
+from ..dependencies.database.relations import (
+    signup_volunteer_event,
+    remove_volunteer_event,
+    get_event_volunteer,
 )
 
 router = APIRouter(prefix="/events", tags=["event"])
@@ -131,5 +136,46 @@ async def delete_event(
 # TODO: Create endpoint for assigning volunteer to event
 @router.post("/{event_id}/signup")
 async def event_volunteer_signup(
-    event_id: str, user_info: UserTokenInfo = Depends(get_current_user)
-): ...
+    event_id: int,
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        if not is_volunteer(user_info):
+            raise HTTPException(403, "User is not volunteer!")
+
+        if not signup_volunteer_event(db, user_info.user_id, event_id):
+            raise HTTPException(500, "Database error.")
+
+    except HTTPException as exc:
+        raise HTTPException(
+            exc.status_code,
+            detail=f"Volunteer could not be signed up to event. {exc.detail}",
+        )
+
+
+@router.delete("/{event_id}/signup")
+async def event_volunteer_delete(
+    event_id: int,
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        if not is_volunteer(user_info):
+            raise HTTPException(403, "User is not volunteer!")
+
+        found_event_volunteer = get_event_volunteer(db, user_info.user_id, event_id)
+
+        if found_event_volunteer is None:
+            raise HTTPException(404, "Volunteer is not signed up to event!")
+
+        if not remove_volunteer_event(
+            db, found_event_volunteer.volunteer.id, found_event_volunteer.event.id
+        ):
+            raise HTTPException(500, "Database error.")
+
+    except HTTPException as exc:
+        raise HTTPException(
+            exc.status_code,
+            detail=f"Volunteer could not be signed up to event. {exc.detail}",
+        )
