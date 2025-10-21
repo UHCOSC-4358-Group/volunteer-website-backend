@@ -1,7 +1,13 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, find_dotenv
 from .dependencies.database.config import lifespan
+from .util.error import (
+    http_exception_handler,
+    validation_exception_error,
+    catch_all_exceptions_middleware,
+)
 
 load_dotenv(dotenv_path=find_dotenv())
 
@@ -16,6 +22,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Error handling stuff
+app.middleware("http")(catch_all_exceptions_middleware)
+
+app.exception_handler(HTTPException)(http_exception_handler)
+
+app.exception_handler(RequestValidationError)(validation_exception_error)
+
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
@@ -24,7 +37,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 # /auth
 app.include_router(auth.router)

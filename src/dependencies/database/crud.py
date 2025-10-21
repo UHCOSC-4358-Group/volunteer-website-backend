@@ -85,6 +85,13 @@ def get_current_admin(db: Session, id: int):
     return current_admin
 
 
+def get_org_from_id(db: Session, id: int):
+
+    org = db.get(dbmodels.Organization, id)
+
+    return org
+
+
 def get_event_from_id(db: Session, id: int):
 
     event = db.get(dbmodels.Event, id)
