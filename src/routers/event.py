@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from ..models.models import EventCreate, EventUpdate
+from ..models.pydanticmodels import EventCreate, EventUpdate
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin
 from ..dependencies.database.config import get_db
 from ..dependencies.database.crud import (

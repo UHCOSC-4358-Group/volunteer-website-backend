@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Response, Depends, HTTPException, responses
 from pydantic import BaseModel, EmailStr
-from ..models.models import VolunteerCreate, Volunteer, AdminCreate, OrgAdmin
+from ..models.pydanticmodels import VolunteerCreate, Volunteer, AdminCreate, OrgAdmin
 from ..dependencies.auth import (
     hash_password,
     verify_password,

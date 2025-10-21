@@ -9,7 +9,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import List
-from .models import EventUrgency
+from .pydanticmodels import EventUrgency
 
 Base = declarative_base()
 

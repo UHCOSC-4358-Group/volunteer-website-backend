@@ -2,11 +2,11 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from ...models import dbmodels, models
+from ...models import dbmodels, pydanticmodels
 
 
 # Example repo-style usage
-def create_volunteer(db: Session, new_volunteer: models.VolunteerCreate):
+def create_volunteer(db: Session, new_volunteer: pydanticmodels.VolunteerCreate):
 
     vol = dbmodels.Volunteer(
         email=new_volunteer.email,
@@ -34,7 +34,7 @@ def create_volunteer(db: Session, new_volunteer: models.VolunteerCreate):
 
 # CREATE OrgAdmin obj
 # Check the obj for expected params ^^^
-def create_org_admin(db: Session, new_admin: models.AdminCreate):
+def create_org_admin(db: Session, new_admin: pydanticmodels.AdminCreate):
 
     admin = dbmodels.OrgAdmin(
         email=new_admin.email,
@@ -99,9 +99,11 @@ def get_event_from_id(db: Session, id: int):
     return event
 
 
-def create_org_event(db: Session, event: models.EventCreate):
+def create_org_event(db: Session, event: pydanticmodels.EventCreate):
 
-    urgency = models.EventUrgency(getattr(event.urgency, "value", event.urgency))
+    urgency = pydanticmodels.EventUrgency(
+        getattr(event.urgency, "value", event.urgency)
+    )
 
     new_event = dbmodels.Event(
         name=event.name,
@@ -136,7 +138,9 @@ def create_org_event(db: Session, event: models.EventCreate):
     return new_event
 
 
-def update_event_helper(old_event: dbmodels.Event, event_updates: models.EventUpdate):
+def update_event_helper(
+    old_event: dbmodels.Event, event_updates: pydanticmodels.EventUpdate
+):
     if event_updates.name is not None:
         old_event.name = event_updates.name
 
@@ -157,7 +161,7 @@ def update_event_helper(old_event: dbmodels.Event, event_updates: models.EventUp
     if event_updates.urgency is not None:
         u = getattr(event_updates.urgency, "value", event_updates.urgency)
 
-        old_event.urgency = models.EventUrgency(u)
+        old_event.urgency = pydanticmodels.EventUrgency(u)
 
     if event_updates.capacity is not None:
         if event_updates.capacity < old_event.assigned:
@@ -172,7 +176,7 @@ def update_event_helper(old_event: dbmodels.Event, event_updates: models.EventUp
 
 
 def update_org_event(
-    db: Session, found_event: dbmodels.Event, event_updates: models.EventUpdate
+    db: Session, found_event: dbmodels.Event, event_updates: pydanticmodels.EventUpdate
 ):
 
     new_event = update_event_helper(found_event, event_updates)

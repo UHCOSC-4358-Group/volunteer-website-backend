@@ -8,7 +8,12 @@ import pytest
 from pydantic import ValidationError
 
 # Import model definitions
-from src.models.models import EventCreate, AdminCreate, VolunteerCreate, EventUrgency
+from models.pydanticmodels import (
+    EventCreate,
+    AdminCreate,
+    VolunteerCreate,
+    EventUrgency,
+)
 
 
 def test_event_create_capacity_must_be_positive():
