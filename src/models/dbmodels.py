@@ -60,6 +60,7 @@ class Organization(Base):
     __tablename__ = "organization"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    location: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text)
     image_url: Mapped[str] = mapped_column(String(512))
 

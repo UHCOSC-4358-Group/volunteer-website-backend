@@ -92,6 +92,88 @@ def get_org_from_id(db: Session, id: int):
     return org
 
 
+def create_new_org(db: Session, org: pydanticmodels.OrgCreate):
+
+    new_org = dbmodels.Event(
+        name=org.name,
+        location=org.location,
+        description=org.description,
+        image_url=org.image_url,
+    )
+
+    db.add(new_org)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise exc
+    db.refresh(new_org)
+    return new_org
+
+
+def delete_org(db: Session, org: dbmodels.Organization):
+    db.delete(org)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        return False
+    return True
+
+
+def update_org_helper(
+    old_org: dbmodels.Organization, org_updates: pydanticmodels.OrgUpdate
+):
+    if org_updates.name is not None:
+        old_org.name = org_updates.name
+    if org_updates.description is not None:
+        old_org.description = org_updates.description
+    if org_updates.location is not None:
+        old_org.location = org_updates.location
+    if org_updates.image_url is not None:
+        old_org.image_url = org_updates.image_url
+
+    return old_org
+
+
+def update_org(
+    db: Session, org: dbmodels.Organization, org_updates: pydanticmodels.OrgUpdate
+):
+
+    updated_org = update_org_helper(org, org_updates)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise exc
+    db.refresh(updated_org)
+    return updated_org
+
+
+def org_admin_signup(db: Session, org_id: int, admin_id: int):
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        return False
+
+    found_org = db.get(dbmodels.Organization, org_id)
+
+    if found_org is None:
+        return False
+
+    found_org.admins.append(found_admin)
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        return False
+    return True
+
+
 def get_event_from_id(db: Session, id: int):
 
     event = db.get(dbmodels.Event, id)

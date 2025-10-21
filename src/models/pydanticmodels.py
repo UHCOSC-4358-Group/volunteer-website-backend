@@ -43,10 +43,25 @@ class EventUpdate(BaseModel):
 
 
 class Org(BaseModel):
-    id: str  # FIXME: REMOVE STR, JUST FOR TESTING PURPOSES
+    id: int
     name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
+    location: str = Field(min_length=1, max_length=255)
     image_url: str
+
+
+class OrgCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=10, max_length=800)
+    location: str = Field(min_length=1, max_length=255)
+    image_url: str = Field(min_length=1, max_length=255)
+
+
+class OrgUpdate(BaseModel):
+    name: str | None = Field(min_length=1, max_length=100)
+    description: str | None = Field(min_length=10, max_length=800)
+    location: str | None = Field(min_length=1, max_length=255)
+    image_url: str | None = Field(min_length=1, max_length=255)
 
 
 class OrgAdmin(BaseModel):
