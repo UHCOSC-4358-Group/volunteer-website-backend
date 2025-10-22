@@ -3,6 +3,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels, pydanticmodels
+from util.error import DatabaseError
+
+
+# For error handling...
+# For retrieval, we can off load the error handling to whoever is calling the function
+# For other methods, such as creating, deleting, updating, we'll throw a custom DatabaseError
 
 
 # Example repo-style usage
@@ -25,9 +31,9 @@ def create_volunteer(db: Session, new_volunteer: pydanticmodels.VolunteerCreate)
     db.add(vol)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(vol)
     return vol
 
@@ -48,9 +54,9 @@ def create_org_admin(db: Session, new_admin: pydanticmodels.AdminCreate):
     db.add(admin)
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(admin)
     return admin
 
@@ -107,7 +113,7 @@ def create_new_org(db: Session, org: pydanticmodels.OrgCreate):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise exc
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(new_org)
     return new_org
 
@@ -119,8 +125,7 @@ def delete_org(db: Session, org: dbmodels.Organization):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        return False
-    return True
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
 
 
 def update_org_helper(
@@ -148,7 +153,7 @@ def update_org(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise exc
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(updated_org)
     return updated_org
 
@@ -187,15 +192,15 @@ def create_org_event(db: Session, event: pydanticmodels.EventCreate):
     ).scalar_one_or_none()
 
     if organization is None:
-        return None
+        raise DatabaseError(404, "Organization id tied to event not found!")
 
     organization.events.append(new_event)
 
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(new_event)
     return new_event
 
@@ -240,14 +245,16 @@ def update_event_helper(
 def update_org_event(
     db: Session, found_event: dbmodels.Event, event_updates: pydanticmodels.EventUpdate
 ):
-
-    new_event = update_event_helper(found_event, event_updates)
+    try:
+        new_event = update_event_helper(found_event, event_updates)
+    except ValueError as exc:
+        raise DatabaseError(400, f"Error updating database event! {exc}")
 
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        raise
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(new_event)
     return new_event
 
@@ -258,7 +265,6 @@ def delete_org_event(db: Session, event: dbmodels.Event):
 
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as exc:
         db.rollback()
-        return False
-    return True
+        raise DatabaseError(500, f"An error occured commiting to database! {exc}")

@@ -5,7 +5,6 @@ from sqlalchemy import (
     ForeignKey,
     CheckConstraint,
     Text,
-    text,
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import List
