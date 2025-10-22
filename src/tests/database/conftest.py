@@ -8,6 +8,7 @@ from src.models import dbmodels
 
 class Factories(Protocol):
     def volunteer(self, *, email: Optional[str] = None) -> dbmodels.Volunteer: ...
+    def admin(self, *, email: Optional[str] = None) -> dbmodels.OrgAdmin: ...
     def organization(self, *, name: Optional[str] = None) -> dbmodels.Organization: ...
     def event(
         self,
@@ -76,6 +77,20 @@ def factories(db_session: Session) -> Factories:
             db_session.add(v)
             db_session.commit()
             return v
+
+        def admin(self, *, email=None):
+            n = next(counter)
+            a = dbmodels.OrgAdmin(
+                email=email or f"user{n}@example.com",
+                password="x",
+                first_name=f"First{n}",
+                last_name=f"Last{n}",
+                description="",
+                image_url="",
+            )
+            db_session.add(a)
+            db_session.commit()
+            return a
 
         def organization(self, *, name=None):
             n = next(counter)
