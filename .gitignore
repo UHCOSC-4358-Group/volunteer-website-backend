@@ -25,3 +25,4 @@ coverage/
 *.test
 test-results/
 .github/
+.pytest_cache/
