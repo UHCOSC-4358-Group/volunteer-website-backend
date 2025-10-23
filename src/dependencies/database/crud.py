@@ -154,7 +154,7 @@ def update_org(db: Session, org_id: int, org_updates: pydanticmodels.OrgUpdate):
     if found_org is None:
         raise DatabaseError(404, f"Organization with id {org_id} not found!")
 
-    updated_org = update_org_helper(found_org, org_updates)
+    updated_org: dbmodels.Organization = update_org_helper(found_org, org_updates)
 
     try:
         db.commit()
@@ -199,11 +199,7 @@ def create_org_event(db: Session, event: pydanticmodels.EventCreate, admin_id: i
     for s in {s.strip() for s in skills if s and s.strip()}:
         new_event.needed_skills.append(dbmodels.EventSkill(skill=s))
 
-    organization = db.execute(
-        select(dbmodels.Organization).where(
-            dbmodels.Organization.id == new_event.org_id
-        )
-    ).scalar_one_or_none()
+    organization = db.get(dbmodels.Organization, new_event.org_id)
 
     if organization is None:
         raise DatabaseError(404, "Organization id tied to event not found!")

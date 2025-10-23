@@ -4,7 +4,6 @@ from ..models.pydanticmodels import EventCreate, EventUpdate
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin, is_volunteer
 from ..dependencies.database.config import get_db
 from ..dependencies.database.crud import (
-    get_current_admin,
     create_org_event,
     update_org_event,
     delete_org_event,
@@ -13,7 +12,6 @@ from ..dependencies.database.crud import (
 from ..dependencies.database.relations import (
     signup_volunteer_event,
     remove_volunteer_event,
-    get_event_volunteer,
 )
 from ..util.error import DatabaseError
 

@@ -63,6 +63,7 @@ def _event_create_defaults(n: int) -> Dict[str, Any]:
         "capacity": 5,
         # Pass a real org_id from your test when needed; default keeps it simple
         "org_id": 1,
+        "needed_skills": ["x"],
     }
 
 
