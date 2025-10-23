@@ -121,35 +121,62 @@ def test_get_org_from_id(db_session: Session, factories: Factories):
     assert found_org == db_org
 
 
-def test_create_new_org(db_session: Session):
+def test_create_new_org(db_session: Session, factories: Factories):
 
     NAME = "ORG"
 
+    admin_obj = factories.admin()
+
     org_create = org.build(name=NAME)
 
-    db_org = crud.create_new_org(db_session, org_create)
+    db_org = crud.create_new_org(db_session, org_create, admin_obj.id)
 
     assert db_org.name == NAME
+
+    # Fake admin Id
+    FAKE_ADMIN_ID = -5
+    with pytest.raises(DatabaseError) as exc:
+        crud.create_new_org(db_session, org_create, FAKE_ADMIN_ID)
+
+    assert exc.value.status_code == 404
 
 
 def test_delete_org(db_session: Session, factories: Factories):
 
-    NAME = "SUPERORG"
-    IMAGE_URL = "EXAMPLE.COM/image_url"
-    FAKE_ID = -5
-
-    db_org = factories.organization(name=NAME, image_url=IMAGE_URL)
+    db_org = factories.organization()
+    admin_obj = factories.admin(org_id=db_org.id)
 
     org_id = db_org.id
 
-    crud.delete_org(db_session, org_id)
+    crud.delete_org(db_session, org_id, admin_obj.id)
 
     assert crud.get_org_from_id(db_session, org_id) is None
 
+    db_org = factories.organization()
+    admin_obj = factories.admin(org_id=db_org.id)
+
+    org_id = db_org.id
+
+    # Fake admin id
+    FAKE_ADMIN_ID = -5
     with pytest.raises(DatabaseError) as exc:
-        crud.delete_org(db_session, FAKE_ID)
+        crud.delete_org(db_session, org_id, FAKE_ADMIN_ID)
 
     assert exc.value.status_code == 404
+
+    # Fake org id
+    FAKE_ID = -5
+    with pytest.raises(DatabaseError) as exc:
+        crud.delete_org(db_session, FAKE_ID, admin_obj.id)
+
+    assert exc.value.status_code == 404
+
+    # Non authorized admin
+    non_auth_admin = factories.admin()
+    with pytest.raises(DatabaseError) as exc:
+        crud.delete_org(db_session, org_id, non_auth_admin.id)
+
+    assert exc.value.status_code == 403
 
 
 def test_update_org_helper(db_session: Session, factories: Factories):
@@ -199,6 +226,7 @@ def test_update_org(db_session: Session, factories: Factories):
     FAKE_ID = -5
 
     db_org = factories.organization()
+    admin_obj = factories.admin(org_id=db_org.id)
 
     org_id = db_org.id
     old_org_location = db_org.location
@@ -208,17 +236,33 @@ def test_update_org(db_session: Session, factories: Factories):
         name=NAME, image_url=IMAGE_URL, location=None, description=None
     )
 
-    updated_org = crud.update_org(db_session, org_id, org_updates)
+    updated_org = crud.update_org(db_session, org_id, org_updates, admin_obj.id)
 
     assert updated_org.name == NAME
     assert updated_org.image_url == IMAGE_URL
     assert updated_org.location == old_org_location
     assert updated_org.description == old_org_description
 
+    # Fake org id
+    FAKE_ID = -5
     with pytest.raises(DatabaseError) as exc:
-        crud.update_org(db_session, FAKE_ID, org_updates)
+        crud.update_org(db_session, FAKE_ID, org_updates, admin_obj.id)
 
     assert exc.value.status_code == 404
+
+    # Fake admin id
+    ADMIN_FAKE_ID = -5
+    with pytest.raises(DatabaseError) as exc:
+        crud.update_org(db_session, org_id, org_updates, ADMIN_FAKE_ID)
+
+    assert exc.value.status_code == 404
+
+    # Non authorized admin
+    non_auth_admin = factories.admin()
+    with pytest.raises(DatabaseError) as exc:
+        crud.update_org(db_session, org_id, org_updates, non_auth_admin.id)
+
+    assert exc.value.status_code == 403
 
 
 def test_get_event_from_id(db_session: Session, factories: Factories):
