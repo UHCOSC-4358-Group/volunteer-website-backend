@@ -118,8 +118,13 @@ def create_new_org(db: Session, org: pydanticmodels.OrgCreate):
     return new_org
 
 
-def delete_org(db: Session, org: dbmodels.Organization):
-    db.delete(org)
+def delete_org(db: Session, org_id: int):
+    found_org = db.get(dbmodels.Organization, org_id)
+
+    if found_org is None:
+        raise DatabaseError(404, f"Organization with id {org_id} not found!")
+
+    db.delete(found_org)
 
     try:
         db.commit()
@@ -143,11 +148,13 @@ def update_org_helper(
     return old_org
 
 
-def update_org(
-    db: Session, org: dbmodels.Organization, org_updates: pydanticmodels.OrgUpdate
-):
+def update_org(db: Session, org_id: int, org_updates: pydanticmodels.OrgUpdate):
+    found_org = db.get(dbmodels.Organization, org_id)
 
-    updated_org = update_org_helper(org, org_updates)
+    if found_org is None:
+        raise DatabaseError(404, f"Organization with id {org_id} not found!")
+
+    updated_org = update_org_helper(found_org, org_updates)
 
     try:
         db.commit()
@@ -165,8 +172,15 @@ def get_event_from_id(db: Session, id: int):
     return event
 
 
-# This could be in relations, but I want to keep event CRUD logic together
-def create_org_event(db: Session, event: pydanticmodels.EventCreate):
+def create_org_event(db: Session, event: pydanticmodels.EventCreate, admin_id: int):
+
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+
+    if found_admin.org_id != event.org_id:
+        raise DatabaseError(403, "Authenticated admin not apart of organization!")
 
     urgency = pydanticmodels.EventUrgency(
         getattr(event.urgency, "value", event.urgency)
@@ -243,8 +257,21 @@ def update_event_helper(
 
 
 def update_org_event(
-    db: Session, found_event: dbmodels.Event, event_updates: pydanticmodels.EventUpdate
+    db: Session, event_id: int, event_updates: pydanticmodels.EventUpdate, admin_id: int
 ):
+    found_event = db.get(dbmodels.Event, event_id)
+
+    if found_event is None:
+        raise DatabaseError(404, f"Event with id {event_id} not found!")
+
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+
+    if found_admin.org_id != found_event.org_id:
+        raise DatabaseError(403, "Authenticated admin not apart of organization!")
+
     try:
         new_event = update_event_helper(found_event, event_updates)
     except ValueError as exc:
@@ -259,9 +286,22 @@ def update_org_event(
     return new_event
 
 
-def delete_org_event(db: Session, event: dbmodels.Event):
+def delete_org_event(db: Session, event_id: int, admin_id: int):
 
-    db.delete(event)
+    found_event = db.get(dbmodels.Event, event_id)
+
+    if found_event is None:
+        raise DatabaseError(404, f"Event with id {event_id} not found!")
+
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+
+    if found_event.org_id != found_admin.org_id:
+        raise DatabaseError(403, "Authenticated admin not apart of organization!")
+
+    db.delete(found_event)
 
     try:
         db.commit()

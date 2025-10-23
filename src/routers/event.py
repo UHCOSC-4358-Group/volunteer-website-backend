@@ -48,15 +48,9 @@ async def create_event(
         if not is_admin(user_info):
             raise HTTPException(403, "User is not an admin!")
 
-        found_admin = get_current_admin(db, user_info.user_id)
+        admin_id = user_info.user_id
 
-        if found_admin is None:
-            raise HTTPException(403, "Authenticated user not found!")
-
-        if found_admin.org_id != event.org_id:
-            raise HTTPException(403, "Admin is not part of organization!")
-
-        new_event = create_org_event(db, event)
+        new_event = create_org_event(db, event, admin_id)
 
         return new_event
     except (HTTPException, DatabaseError) as exc:
@@ -78,20 +72,9 @@ async def update_event(
         if not is_admin(user_info):
             raise HTTPException(403, "User is not an admin!")
 
-        found_admin = get_current_admin(db, user_info.user_id)
+        admin_id = user_info.user_id
 
-        if found_admin is None:
-            raise HTTPException(403, "Authenticated user not found!")
-
-        found_event = get_event_from_id(db, event_id)
-
-        if found_event is None:
-            raise HTTPException(404, "Event not found!")
-
-        if found_admin.org_id != found_event.org_id:
-            raise HTTPException(403, "Admin is not part of organization!")
-
-        updated_event = update_org_event(db, found_event, event_updates)
+        updated_event = update_org_event(db, event_id, event_updates, admin_id)
 
         return updated_event
     except (HTTPException, DatabaseError) as exc:
@@ -114,24 +97,10 @@ async def delete_event(
         if not is_admin(user_info):
             raise HTTPException(403, "User is not an admin!")
 
-        found_admin = get_current_admin(db, user_info.user_id)
+        admin_id = user_info.user_id
 
-        if found_admin is None:
-            raise HTTPException(
-                403, "Event could not be updated. Authenticated user not found!"
-            )
-
-        found_event = get_event_from_id(db, event_id)
-
-        if found_event is None:
-            raise HTTPException(404, "Event could not be updated. Event not found!")
-
-        if found_admin.org_id != found_event.org_id:
-            raise HTTPException(
-                403, "Event could not be updated. Admin is not part of organization!"
-            )
-
-        delete_org_event(db, found_event)
+        # DB function handles authorization through org_id
+        delete_org_event(db, event_id, admin_id)
 
         return {"message": "Event deleted successfully!"}
     except (HTTPException, DatabaseError) as exc:
@@ -149,9 +118,11 @@ async def event_volunteer_signup(
 ):
     try:
         if not is_volunteer(user_info):
-            raise HTTPException(403, "User is not volunteer!")
+            raise HTTPException(403, "User is not a volunteer!")
 
-        signup_volunteer_event(db, user_info.user_id, event_id)
+        vol_id = user_info.user_id
+
+        signup_volunteer_event(db, vol_id, event_id)
 
         return {"message": "Volunteer has been signed up to event!"}
 
@@ -170,16 +141,11 @@ async def event_volunteer_delete(
 ):
     try:
         if not is_volunteer(user_info):
-            raise HTTPException(403, "User is not volunteer!")
+            raise HTTPException(403, "User is not a volunteer!")
 
-        found_event_volunteer = get_event_volunteer(db, user_info.user_id, event_id)
+        vol_id = user_info.user_id
 
-        if found_event_volunteer is None:
-            raise HTTPException(404, "Volunteer is not signed up to event!")
-
-        remove_volunteer_event(
-            db, found_event_volunteer.volunteer.id, found_event_volunteer.event.id
-        )
+        remove_volunteer_event(db, vol_id, event_id)
 
         return {"message": "Volunteer has been disenrolled from event"}
 
