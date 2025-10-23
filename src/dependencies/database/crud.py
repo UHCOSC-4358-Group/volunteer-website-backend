@@ -98,7 +98,12 @@ def get_org_from_id(db: Session, id: int):
     return org
 
 
-def create_new_org(db: Session, org: pydanticmodels.OrgCreate):
+def create_new_org(db: Session, org: pydanticmodels.OrgCreate, admin_id: int):
+
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
 
     new_org = dbmodels.Organization(
         name=org.name,
@@ -106,6 +111,8 @@ def create_new_org(db: Session, org: pydanticmodels.OrgCreate):
         description=org.description,
         image_url=org.image_url,
     )
+
+    new_org.admins.append(found_admin)
 
     db.add(new_org)
 
@@ -118,11 +125,20 @@ def create_new_org(db: Session, org: pydanticmodels.OrgCreate):
     return new_org
 
 
-def delete_org(db: Session, org_id: int):
+def delete_org(db: Session, org_id: int, admin_id: int):
+
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+
     found_org = db.get(dbmodels.Organization, org_id)
 
     if found_org is None:
         raise DatabaseError(404, f"Organization with id {org_id} not found!")
+
+    if found_admin.org_id != found_org.id:
+        raise DatabaseError(403, f"Authenticated admin not apart of org!")
 
     db.delete(found_org)
 
@@ -148,11 +164,21 @@ def update_org_helper(
     return old_org
 
 
-def update_org(db: Session, org_id: int, org_updates: pydanticmodels.OrgUpdate):
+def update_org(
+    db: Session, org_id: int, org_updates: pydanticmodels.OrgUpdate, admin_id: int
+):
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+
     found_org = db.get(dbmodels.Organization, org_id)
 
     if found_org is None:
         raise DatabaseError(404, f"Organization with id {org_id} not found!")
+
+    if found_admin.org_id != found_org.id:
+        raise DatabaseError(403, "Authenticated admin not apart of org!")
 
     updated_org: dbmodels.Organization = update_org_helper(found_org, org_updates)
 

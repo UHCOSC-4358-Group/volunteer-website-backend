@@ -39,16 +39,9 @@ async def create_org(
         if not is_admin(user_info):
             raise HTTPException(403, "User is not an admin")
 
-        found_admin = get_current_admin(db, user_info.user_id)
+        admin_id = user_info.user_id
 
-        if found_admin is None:
-            raise HTTPException(404, "Authenticated admin not found in database!")
-
-        new_org = create_new_org(db, org)
-
-        # We wanna sign up the person who made the organization
-        if not signup_org_admin(db, new_org.id, found_admin.id):
-            raise HTTPException(500, "Database error")
+        new_org = create_new_org(db, org, admin_id)
 
         return new_org
 
@@ -69,22 +62,11 @@ async def update_org_from_id(
         if not is_admin(user_info):
             raise HTTPException(403, "User is not an admin")
 
-        found_admin = get_current_admin(db, user_info.user_id)
+        admin_id = user_info.user_id
 
-        if found_admin is None:
-            raise HTTPException(404, "Authenticated admin not found in database!")
+        updated_org = update_org(db, org_id, org_updates, admin_id)
 
-        found_org = get_org_from_id(db, org_id)
-
-        if found_org is None:
-            raise HTTPException(404, f"Organization with id '{org_id}' not found!")
-
-        if found_admin.org_id != found_org.id:
-            raise HTTPException(403, "Admin is not apart of organization!")
-
-        new_org = update_org(db, found_org, org_updates)
-
-        return new_org
+        return updated_org
 
     except HTTPException as exc:
         raise HTTPException(
@@ -102,21 +84,9 @@ async def delete_org_from_id(
         if not is_admin(user_info):
             raise HTTPException(403, "User is not an admin")
 
-        found_admin = get_current_admin(db, user_info.user_id)
+        admin_id = user_info.user_id
 
-        if found_admin is None:
-            raise HTTPException(404, "Authenticated admin not found in database!")
-
-        found_org = get_org_from_id(db, org_id)
-
-        if found_org is None:
-            raise HTTPException(404, f"Organization with id '{org_id}' not found!")
-
-        if found_admin.org_id != found_org.id:
-            raise HTTPException(403, "Admin is not apart of organization!")
-
-        if not delete_org(db, found_org):
-            raise HTTPException(500, "Database error when deleting")
+        delete_org(db, org_id, admin_id)
 
         return {"message": f"Event successfully deleted!"}
 
