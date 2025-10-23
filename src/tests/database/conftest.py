@@ -2,21 +2,15 @@ import itertools
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
-from typing import Protocol, Optional
+from typing import Any, Protocol, Optional
 from src.models import dbmodels
 
 
 class Factories(Protocol):
-    def volunteer(self, *, email: Optional[str] = None) -> dbmodels.Volunteer: ...
-    def admin(self, *, email: Optional[str] = None) -> dbmodels.OrgAdmin: ...
-    def organization(self, *, name: Optional[str] = None) -> dbmodels.Organization: ...
-    def event(
-        self,
-        *,
-        org: Optional[dbmodels.Organization] = None,
-        capacity: int = 5,
-        name: Optional[str] = None,
-    ) -> dbmodels.Event: ...
+    def volunteer(self, **overrides: Any) -> dbmodels.Volunteer: ...
+    def admin(self, **overrides: Any) -> dbmodels.OrgAdmin: ...
+    def organization(self, **overrides: Any) -> dbmodels.Organization: ...
+    def event(self, **overrides: Any) -> dbmodels.Event: ...
 
 
 engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
@@ -62,60 +56,85 @@ def db_session():
 def factories(db_session: Session) -> Factories:
     counter = itertools.count(1)
 
+    def _volunteer_defaults(n: int) -> dict[str, Any]:
+        return {
+            "email": f"user{n}@example.com",
+            "password": "x",
+            "first_name": f"First{n}",
+            "last_name": f"Last{n}",
+            "description": "",
+            "image_url": "",
+            "location": "Houston",
+        }
+
+    def _admin_defaults(n: int) -> dict[str, Any]:
+        return {
+            "email": f"admin{n}@example.com",
+            "password": "x",
+            "first_name": f"First{n}",
+            "last_name": f"Last{n}",
+            "description": "",
+            "image_url": "",
+        }
+
+    def _organization_defaults(n: int) -> dict[str, Any]:
+        return {
+            "name": f"Org {n}",
+            "location": "Houston",
+            "description": "",
+            "image_url": "",
+        }
+
+    def _event_defaults(n: int) -> dict[str, Any]:
+        return {
+            "name": f"Event {n}",
+            "description": "desc",
+            "location": "Houston",
+            "urgency": dbmodels.EventUrgency.LOW,
+            "capacity": 5,
+            # org_id will be filled automatically if not provided
+        }
+
     class F:
-        def volunteer(self, *, email=None):
+        def volunteer(self, **overrides: Any) -> dbmodels.Volunteer:
             n = next(counter)
-            v = dbmodels.Volunteer(
-                email=email or f"user{n}@example.com",
-                password="x",
-                first_name=f"First{n}",
-                last_name=f"Last{n}",
-                description="",
-                image_url="",
-                location="Houston",
-            )
+            data = {**_volunteer_defaults(n), **overrides}
+            v = dbmodels.Volunteer(**data)
             db_session.add(v)
             db_session.commit()
             return v
 
-        def admin(self, *, email=None):
+        def admin(self, **overrides: Any) -> dbmodels.OrgAdmin:
             n = next(counter)
-            a = dbmodels.OrgAdmin(
-                email=email or f"user{n}@example.com",
-                password="x",
-                first_name=f"First{n}",
-                last_name=f"Last{n}",
-                description="",
-                image_url="",
-            )
+            data = {**_admin_defaults(n), **overrides}
+            a = dbmodels.OrgAdmin(**data)
             db_session.add(a)
             db_session.commit()
             return a
 
-        def organization(self, *, name=None):
+        def organization(self, **overrides: Any) -> dbmodels.Organization:
             n = next(counter)
-            org = dbmodels.Organization(
-                name=name or f"Org {n}",
-                location="Houston",
-                description="",
-                image_url="",
-            )
+            data = {**_organization_defaults(n), **overrides}
+            org = dbmodels.Organization(**data)
             db_session.add(org)
             db_session.commit()
             return org
 
-        def event(self, *, org=None, capacity=5, name=None):
-            if org is None:
-                org = self.organization()
+        def event(self, **overrides: Any) -> dbmodels.Event:
             n = next(counter)
-            ev = dbmodels.Event(
-                name=name or f"Event {n}",
-                description="desc",
-                location="Houston",
-                urgency=dbmodels.EventUrgency.LOW,
-                capacity=capacity,
-                org_id=org.id,
-            )
+            data = {**_event_defaults(n), **overrides}
+
+            # Allow passing an Organization instance directly
+            org_obj = data.pop("org", None)
+            if org_obj is not None:
+                data["org_id"] = org_obj.id
+
+            # If no org_id provided, auto-create an organization
+            if "org_id" not in data or data["org_id"] is None:
+                org = self.organization()
+                data["org_id"] = org.id
+
+            ev = dbmodels.Event(**data)
             db_session.add(ev)
             db_session.commit()
             return ev

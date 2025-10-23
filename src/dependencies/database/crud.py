@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels, pydanticmodels
-from util.error import DatabaseError
+from ...util.error import DatabaseError
 
 
 # For error handling...
@@ -100,7 +100,7 @@ def get_org_from_id(db: Session, id: int):
 
 def create_new_org(db: Session, org: pydanticmodels.OrgCreate):
 
-    new_org = dbmodels.Event(
+    new_org = dbmodels.Organization(
         name=org.name,
         location=org.location,
         description=org.description,
