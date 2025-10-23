@@ -2,6 +2,7 @@ import itertools
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import StaticPool
 from typing import Any, Protocol, Optional
 from src.models import dbmodels
 
@@ -13,7 +14,12 @@ class Factories(Protocol):
     def event(self, **overrides: Any) -> dbmodels.Event: ...
 
 
-engine = create_engine("sqlite+pysqlite:///:memory:", future=True)
+engine = create_engine(
+    "sqlite+pysqlite:///:memory:",
+    future=True,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
 
 
 @event.listens_for(engine, "connect")
