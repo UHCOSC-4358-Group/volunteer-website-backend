@@ -1,12 +1,12 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
-import json
-from src.models import dbmodels
+from datetime import time
+import pytest
+from src.models import dbmodels, pydanticmodels
 from src.routers.auth import LoginData
 from src.dependencies.auth import hash_password, decodeJWT
 from src.tests.factories.pydantic_factories import (
-    org as org_factory,
     volunteer as volunteer_factory,
     admin as admin_factory,
 )
@@ -29,6 +29,20 @@ def test_volunteer_signup(client: TestClient, db_session: Session):
         )
         is not None
     )
+
+    # Overlapping times in validation checks
+    times = [
+        pydanticmodels.AvailableTime(
+            day=pydanticmodels.DayOfWeek.FRIDAY, start=time(17), end=time(21)
+        ),
+        pydanticmodels.AvailableTime(
+            day=pydanticmodels.DayOfWeek.FRIDAY, start=time(18), end=time(20)
+        ),
+    ]
+
+    # Checking object validation
+    with pytest.raises(ValueError):
+        volunteer_create = volunteer_factory.dict(available_times=times)
 
 
 def test_volunteer_login(client: TestClient, factories: Factories):
