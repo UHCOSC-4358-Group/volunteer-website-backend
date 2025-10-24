@@ -1,4 +1,5 @@
 # Where we handle DB session / CRUD methods
+import logging
 from fastapi import FastAPI, Request
 from ...models.dbmodels import Base
 from contextlib import asynccontextmanager
@@ -46,6 +47,7 @@ async def lifespan(app: FastAPI):
         yield
     finally:
         engine.dispose()
+        logging.shutdown()
 
 
 # Dependency: per-request Session, no globals
