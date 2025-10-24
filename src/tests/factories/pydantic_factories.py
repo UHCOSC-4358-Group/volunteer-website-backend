@@ -45,6 +45,7 @@ def _volunteer_create_defaults(n: int) -> Dict[str, Any]:
         "description": "test_volunteer",
         "image_url": "x",
         "location": "Houston",
+        "skills": ["x"],
     }
 
 

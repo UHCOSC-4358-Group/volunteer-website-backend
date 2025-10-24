@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Response, Depends, HTTPException
+from fastapi import APIRouter, Response, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from ..models.pydanticmodels import VolunteerCreate, AdminCreate
 from ..dependencies.auth import (
@@ -25,7 +25,7 @@ from ..dependencies.database.crud import (
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/vol/signup")
+@router.post("/vol/signup", status_code=status.HTTP_201_CREATED)
 async def volunteer_signup(
     vol: VolunteerCreate, response: Response, db: Session = Depends(get_db)
 ):
@@ -61,7 +61,7 @@ async def volunteer_login(
     }
 
 
-@router.post("/org/signup")
+@router.post("/org/signup", status_code=status.HTTP_201_CREATED)
 async def admin_signup(
     vol: AdminCreate, response: Response, db: Session = Depends(get_db)
 ):

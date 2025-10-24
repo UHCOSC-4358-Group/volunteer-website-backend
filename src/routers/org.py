@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from ..models.pydanticmodels import OrgCreate, OrgUpdate
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin
@@ -28,7 +28,7 @@ async def get_org_details(org_id: int, db: Session = Depends(get_db)):
 
 # Must be authed as an org admin
 # Also, must attach org admin id to user
-@router.post("/create")
+@router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_org(
     org: OrgCreate,
     user_info: UserTokenInfo = Depends(get_current_user),
