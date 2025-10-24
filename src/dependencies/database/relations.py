@@ -2,7 +2,7 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from ...models import dbmodels, pydanticmodels
+from ...models import dbmodels
 from ...util.error import DatabaseError
 
 

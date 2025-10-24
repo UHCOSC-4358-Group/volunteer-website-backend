@@ -3,7 +3,6 @@ from __future__ import annotations
 import itertools
 from typing import Any, Callable, Dict, Generic, Type, TypeVar
 from datetime import time
-from fastapi.encoders import jsonable_encoder
 
 from pydantic import BaseModel
 from src.models import pydanticmodels

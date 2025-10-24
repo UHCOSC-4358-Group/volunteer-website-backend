@@ -2,7 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 import json
-from src.models import pydanticmodels, dbmodels
+from src.models import dbmodels
 from src.routers.auth import LoginData
 from src.dependencies.auth import hash_password, decodeJWT
 from src.tests.factories.pydantic_factories import (
