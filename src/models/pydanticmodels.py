@@ -147,8 +147,8 @@ class AvailableTime(BaseModel):
     model_config = {
         "json_schema_extra": {
             "examples": [
-                {"day": "MONDAY", "start": "09:00", "end": "12:00"},
-                {"day": "WEDNESDAY", "start": "14:30", "end": "17:00"},
+                {"day": DayOfWeek.MONDAY, "start": "09:00", "end": "12:00"},
+                {"day": DayOfWeek.WEDNESDAY, "start": "14:30", "end": "17:00"},
             ]
         }
     }
@@ -169,8 +169,8 @@ class VolunteerCreate(BaseModel):
         description="Weekly availability slots",
         json_schema_extra={
             "example": [
-                {"day": "MONDAY", "start": "09:00", "end": "12:00"},
-                {"day": "FRIDAY", "start": "13:00", "end": "16:30"},
+                {"day": DayOfWeek.MONDAY, "start": "09:00", "end": "12:00"},
+                {"day": DayOfWeek.FRIDAY, "start": "13:00", "end": "16:30"},
             ]
         },
     )
