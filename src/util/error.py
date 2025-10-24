@@ -38,9 +38,7 @@ async def validation_exception_error(
     exception_strings: list[str] = []
 
     for string in exception_object:
-        result = (
-            f"Validation Error in location '{'/'.join(string['loc'])}'. {string['msg']}"
-        )
+        result = f"Validation Error in location '{string['loc']}'. {string['msg']}"
         exception_strings.append(result)
 
     return JSONResponse(
