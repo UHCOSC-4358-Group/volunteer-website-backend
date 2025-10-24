@@ -6,7 +6,7 @@ import pytest
 from src.dependencies.database import crud
 from src.models import pydanticmodels, dbmodels
 from src.util.error import DatabaseError
-from conftest import Factories
+from src.tests.database.conftest import Factories
 from src.tests.factories.pydantic_factories import volunteer, event, admin, org
 
 
@@ -27,7 +27,7 @@ def test_create_volunteer(db_session: Session):
 
 
 # Only check for integrity error
-def test_create_volunteer_with_integrity_erro(db_session: Session):
+def test_create_volunteer_with_integrity_error(db_session: Session):
 
     org_admin = admin.build(first_name="Ricky")
 

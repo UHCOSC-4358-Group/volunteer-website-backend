@@ -1,6 +1,6 @@
-from pydantic import BaseModel, Field, field_validator, EmailStr
+from pydantic import BaseModel, Field, field_validator, model_validator, EmailStr
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, time
 
 
 # TODO: CHANGE INTO SQLALCHEMY MODELS
@@ -19,6 +19,16 @@ class NotificationType(str, Enum):
     EVENT_REMINDER = "event_reminder"
     SKILL_MATCH = "skill_match"
     SYSTEM_UPDATE = "system_update"
+
+
+class DayOfWeek(int, Enum):
+    MONDAY = 1
+    TUESDAY = 2
+    WEDNESDAY = 3
+    THURSDAY = 4
+    FRIDAY = 5
+    SATURDAY = 6
+    SUNDAY = 7
 
 
 class Event(BaseModel):
@@ -123,6 +133,27 @@ class AdminCreate(BaseModel):
     image_url: str
 
 
+class AvailableTime(BaseModel):
+    day: DayOfWeek = Field(description="Day of the week (1-7)")
+    start: time = Field(description="Start time (HH:MM)")
+    end: time = Field(description="End time (HH:MM)")
+
+    @model_validator(mode="after")
+    def validate_time_order(self):
+        if self.start >= self.end:
+            raise ValueError("start must be earlier than end")
+        return self
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"day": "MONDAY", "start": "09:00", "end": "12:00"},
+                {"day": "WEDNESDAY", "start": "14:30", "end": "17:00"},
+            ]
+        }
+    }
+
+
 # For creating Volunteers
 # ex. POST /vol/signup
 class VolunteerCreate(BaseModel):
@@ -134,3 +165,33 @@ class VolunteerCreate(BaseModel):
     image_url: str
     location: str
     skills: list[str]
+    available_times: list[AvailableTime] = Field(
+        description="Weekly availability slots",
+        json_schema_extra={
+            "example": [
+                {"day": "MONDAY", "start": "09:00", "end": "12:00"},
+                {"day": "FRIDAY", "start": "13:00", "end": "16:30"},
+            ]
+        },
+    )
+
+    @model_validator(mode="after")
+    def validate_non_overlapping(self):
+        from collections import defaultdict
+
+        by_day: dict[DayOfWeek, list[tuple[time, time]]] = defaultdict(list)
+        for slot in self.available_times or []:
+            by_day[slot.day].append((slot.start, slot.end))
+
+        for day, slots in by_day.items():
+            slots.sort(key=lambda s: s[0])
+            last_end = None
+            last_start = None
+            for start, end in slots:
+                if last_end is not None and start <= last_end:
+                    raise ValueError(
+                        f"Overlapping availability on {day.name}: {last_start}-{last_end} overlaps {start}-{end}"
+                    )
+                last_start, last_end = start, end
+
+        return self

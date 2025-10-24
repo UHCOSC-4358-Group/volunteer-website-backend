@@ -28,6 +28,16 @@ def create_volunteer(db: Session, new_volunteer: pydanticmodels.VolunteerCreate)
     for s in {s.strip() for s in skills if s and s.strip()}:
         vol.skills.append(dbmodels.VolunteerSkill(skill=s))
 
+    available_times: Iterable[pydanticmodels.AvailableTime] = (
+        getattr(new_volunteer, "available_times", None) or []
+    )
+    for slot in available_times:
+        vol.times_available.append(
+            dbmodels.VolunteerAvailableTime(
+                start_time=slot.start, end_time=slot.end, day_of_week=slot.day
+            )
+        )
+
     db.add(vol)
     try:
         db.commit()

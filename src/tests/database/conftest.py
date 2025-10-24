@@ -3,7 +3,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
-from typing import Any, Protocol, Optional
+from typing import Any, Protocol
 from src.models import dbmodels
 
 

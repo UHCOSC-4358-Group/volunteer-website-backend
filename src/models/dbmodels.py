@@ -5,10 +5,11 @@ from sqlalchemy import (
     ForeignKey,
     CheckConstraint,
     Text,
+    Time,
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import List
-from .pydanticmodels import EventUrgency
+from .pydanticmodels import EventUrgency, DayOfWeek
 
 Base = declarative_base()
 
@@ -39,6 +40,10 @@ class Volunteer(Base):
         single_parent=True,
     )
 
+    times_available: Mapped[List["VolunteerAvailableTime"]] = relationship(
+        back_populates="volunteer", cascade="all, delete-orphan", passive_deletes=True
+    )
+
 
 class VolunteerSkill(Base):
     __tablename__ = "volunteer_skill"
@@ -53,6 +58,27 @@ class VolunteerSkill(Base):
 
     # Many-to-one: VolunteerSkill -> Volunteer
     volunteer: Mapped["Volunteer"] = relationship(back_populates="skills")
+
+
+class VolunteerAvailableTime(Base):
+    __tablename__ = "volunteer_weekly_schedule"
+    __table_args__ = (
+        CheckConstraint(
+            "start_time < end_time", name="ck_schedule_start_time_le_end_time"
+        ),
+    )
+    volunteer_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("volunteer.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    start_time: Mapped[Time] = mapped_column(Time, primary_key=True)
+    end_time: Mapped[Time] = mapped_column(Time)
+    day_of_week: Mapped[DayOfWeek] = mapped_column(
+        SAEnum(DayOfWeek, name="schedule_day_of_week"), primary_key=True, index=True
+    )
+
+    volunteer: Mapped["Volunteer"] = relationship(back_populates="times_available")
 
 
 class Organization(Base):

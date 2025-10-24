@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import itertools
 from typing import Any, Callable, Dict, Generic, Type, TypeVar
+from datetime import time
+from fastapi.encoders import jsonable_encoder
 
 from pydantic import BaseModel
 from src.models import pydanticmodels
@@ -28,11 +30,7 @@ class ModelFactory(Generic[T]):
         return self._model(**data)
 
     def dict(self, **overrides: Any) -> Dict[str, Any]:
-        return (
-            self.build(**overrides).model_dump()
-            if hasattr(BaseModel, "model_validate")
-            else self.build(**overrides).dict()
-        )
+        return self.build(**overrides).model_dump(mode="json")
 
 
 # Example: VolunteerCreate factory
@@ -46,6 +44,13 @@ def _volunteer_create_defaults(n: int) -> Dict[str, Any]:
         "image_url": "x",
         "location": "Houston",
         "skills": ["x"],
+        "available_times": [
+            pydanticmodels.AvailableTime(
+                day=pydanticmodels.DayOfWeek.MONDAY,
+                start=time(12, 0, 0),
+                end=time(17, 0, 0),
+            ),
+        ],
     }
 
 

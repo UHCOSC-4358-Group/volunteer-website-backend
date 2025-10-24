@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from src.dependencies.database import relations
 from src.util.error import DatabaseError
-from conftest import Factories
+from src.tests.database.conftest import Factories
 import pytest
 
 
