@@ -35,7 +35,7 @@ async def validation_exception_error(
 
     exception_object = exception.errors()
 
-    exception_strings = []
+    exception_strings: list[str] = []
 
     for string in exception_object:
         result = (
