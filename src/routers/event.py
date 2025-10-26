@@ -107,7 +107,6 @@ async def delete_event(
         )
 
 
-# TODO: Create endpoint for assigning volunteer to event
 @router.post("/{event_id}/signup", status_code=status.HTTP_201_CREATED)
 async def event_volunteer_signup(
     event_id: int,

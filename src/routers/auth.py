@@ -1,5 +1,15 @@
-from fastapi import APIRouter, Response, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    Response,
+    Depends,
+    HTTPException,
+    status,
+    File,
+    Form,
+    UploadFile,
+)
 from pydantic import BaseModel, EmailStr
+from mypy_boto3_s3 import S3Client
 from ..models.pydanticmodels import VolunteerCreate, AdminCreate
 from ..dependencies.auth import (
     hash_password,
@@ -21,18 +31,32 @@ from ..dependencies.database.crud import (
     get_current_volunteer,
     get_current_admin,
 )
+from ..dependencies.aws import get_s3, upload_image
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/vol/signup", status_code=status.HTTP_201_CREATED)
 async def volunteer_signup(
-    vol: VolunteerCreate, response: Response, db: Session = Depends(get_db)
+    response: Response,
+    vol_str: str = Form(),
+    image: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
+    s3: S3Client = Depends(get_s3),
 ):
+
+    # If user uploaded an image, then upload image to aws and return the url
+    vol = VolunteerCreate.model_validate_json(vol_str)
+
+    if image is not None:
+        vol.image_url = upload_image(s3, image)
+
     vol.password = hash_password(vol.password)
 
     volunteer_obj = create_volunteer(db, vol)
+
     sign_JWT_volunteer(volunteer_obj.id, response)
+
     return {
         "message": f"Volunteer {volunteer_obj.first_name} {volunteer_obj.last_name} with id {volunteer_obj.id} has been created!"
     }

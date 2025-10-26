@@ -3,6 +3,10 @@ from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
 from datetime import time
 import pytest
+import json
+import os
+from io import BytesIO
+from mypy_boto3_s3 import S3Client
 from src.models import dbmodels, pydanticmodels
 from src.routers.auth import LoginData
 from src.dependencies.auth import hash_password, decodeJWT
@@ -13,13 +17,28 @@ from src.tests.factories.pydantic_factories import (
 from src.tests.database.conftest import Factories  # from tests/database/conftest.py
 
 
-def test_volunteer_signup(client: TestClient, db_session: Session):
+def test_volunteer_signup(client: TestClient, db_session: Session, aws_s3: S3Client):
     FIRST_NAME = "VOLUNTEER"
     volunteer_create = volunteer_factory.dict(name=FIRST_NAME)
 
-    resp = client.post(f"/auth/vol/signup", json=volunteer_create)
+    # Have to use json string since it's a multipart form
+    json_str = json.dumps(volunteer_create)
+
+    fake_image = BytesIO(b"fake image bytes")
+    fake_image.name = "profile.png"
+
+    resp = client.post(
+        f"/auth/vol/signup",
+        data={"vol_str": json_str},
+        files={"image": ("profile.png", fake_image, "image/png")},
+    )
 
     assert resp.status_code == 201
+
+    AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
+
+    assert AWS_BUCKET_NAME is not None
+    assert len(aws_s3.list_objects_v2(Bucket=AWS_BUCKET_NAME)) > 0
 
     assert (
         db_session.execute(

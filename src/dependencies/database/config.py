@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+from ..aws import create_bucket
 import os
 
 
@@ -41,8 +42,11 @@ async def lifespan(app: FastAPI):
 
     Base.metadata.create_all(engine)
 
+    s3 = create_bucket()
+
     app.state.engine = engine
     app.state.SessionLocal = SessionLocal
+    app.state.s3 = s3
     try:
         yield
     finally:
