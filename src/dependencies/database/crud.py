@@ -12,7 +12,11 @@ from ...util.error import DatabaseError
 
 
 # Example repo-style usage
-def create_volunteer(db: Session, new_volunteer: pydanticmodels.VolunteerCreate):
+def create_volunteer(
+    db: Session,
+    new_volunteer: pydanticmodels.VolunteerCreate,
+    image_url: str | None = None,
+):
 
     vol = dbmodels.Volunteer(
         email=new_volunteer.email,
@@ -20,7 +24,7 @@ def create_volunteer(db: Session, new_volunteer: pydanticmodels.VolunteerCreate)
         first_name=new_volunteer.first_name,
         last_name=new_volunteer.last_name,
         description=new_volunteer.description,
-        image_url=new_volunteer.image_url,
+        image_url=image_url,
         location=new_volunteer.location,
     )
 
@@ -50,7 +54,9 @@ def create_volunteer(db: Session, new_volunteer: pydanticmodels.VolunteerCreate)
 
 # CREATE OrgAdmin obj
 # Check the obj for expected params ^^^
-def create_org_admin(db: Session, new_admin: pydanticmodels.AdminCreate):
+def create_org_admin(
+    db: Session, new_admin: pydanticmodels.AdminCreate, image_url: str | None = None
+):
 
     admin = dbmodels.OrgAdmin(
         email=new_admin.email,
@@ -58,7 +64,7 @@ def create_org_admin(db: Session, new_admin: pydanticmodels.AdminCreate):
         first_name=new_admin.first_name,
         last_name=new_admin.last_name,
         description=new_admin.description,
-        image_url=new_admin.image_url,
+        image_url=image_url,
     )
 
     db.add(admin)
@@ -108,7 +114,12 @@ def get_org_from_id(db: Session, id: int):
     return org
 
 
-def create_new_org(db: Session, org: pydanticmodels.OrgCreate, admin_id: int):
+def create_new_org(
+    db: Session,
+    org: pydanticmodels.OrgCreate,
+    admin_id: int,
+    image_url: str | None = None,
+):
 
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
@@ -119,7 +130,7 @@ def create_new_org(db: Session, org: pydanticmodels.OrgCreate, admin_id: int):
         name=org.name,
         location=org.location,
         description=org.description,
-        image_url=org.image_url,
+        image_url=image_url,
     )
 
     new_org.admins.append(found_admin)

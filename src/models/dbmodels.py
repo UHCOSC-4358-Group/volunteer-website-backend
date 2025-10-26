@@ -22,7 +22,7 @@ class Volunteer(Base):
     first_name: Mapped[str] = mapped_column(String(100), nullable=False)
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(Text)
-    image_url: Mapped[str] = mapped_column(String(512))
+    image_url: Mapped[str] = mapped_column(String(512), nullable=True)
     location: Mapped[str] = mapped_column(String(255))
 
     # One-to-many: Volunteer -> VolunteerSkill
@@ -87,7 +87,7 @@ class Organization(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text)
-    image_url: Mapped[str] = mapped_column(String(512))
+    image_url: Mapped[str] = mapped_column(String(512), nullable=True)
 
     # One-to-many: Organization -> OrgAdmin (SET NULL on org delete)
     admins: Mapped[List["OrgAdmin"]] = relationship(
@@ -111,7 +111,7 @@ class OrgAdmin(Base):
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(Text)
-    image_url: Mapped[str] = mapped_column(String(512))
+    image_url: Mapped[str] = mapped_column(String(512), nullable=True)
     # org_id is set to NULL when organization is deleted
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organization.id", ondelete="SET NULL"),

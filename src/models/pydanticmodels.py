@@ -40,7 +40,6 @@ class OrgCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(min_length=10, max_length=800)
     location: str = Field(min_length=1, max_length=255)
-    image_url: str = Field(min_length=1, max_length=255)
 
 
 class OrgUpdate(BaseModel):
@@ -83,7 +82,6 @@ class AdminCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
-    image_url: str
 
 
 class AvailableTime(BaseModel):
@@ -115,7 +113,6 @@ class VolunteerCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
-    image_url: str
     location: str
     skills: list[str]
     available_times: list[AvailableTime] = Field(

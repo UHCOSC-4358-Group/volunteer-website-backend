@@ -39,7 +39,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/vol/signup", status_code=status.HTTP_201_CREATED)
 async def volunteer_signup(
     response: Response,
-    vol_str: str = Form(),
+    vol_str: str = Form(json_schema_extra=VolunteerCreate.model_json_schema()),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
@@ -48,12 +48,13 @@ async def volunteer_signup(
     # If user uploaded an image, then upload image to aws and return the url
     vol = VolunteerCreate.model_validate_json(vol_str)
 
+    image_url: str | None = None
     if image is not None:
-        vol.image_url = upload_image(s3, image)
+        image_url = upload_image(s3, image)
 
     vol.password = hash_password(vol.password)
 
-    volunteer_obj = create_volunteer(db, vol)
+    volunteer_obj = create_volunteer(db, vol, image_url)
 
     sign_JWT_volunteer(volunteer_obj.id, response)
 
@@ -87,10 +88,19 @@ async def volunteer_login(
 
 @router.post("/org/signup", status_code=status.HTTP_201_CREATED)
 async def admin_signup(
-    vol: AdminCreate, response: Response, db: Session = Depends(get_db)
+    response: Response,
+    admin_str: str = Form(json_schema_extra=AdminCreate.model_json_schema()),
+    image: UploadFile = File(default=None),
+    db: Session = Depends(get_db),
+    s3: S3Client = Depends(get_s3),
 ):
-    vol.password = hash_password(vol.password)
-    admin_obj = create_org_admin(db, vol)
+    admin = AdminCreate.model_validate_json(admin_str)
+    image_url: str | None = None
+    if image is not None:
+        image_url = upload_image(s3, image)
+
+    admin.password = hash_password(admin.password)
+    admin_obj = create_org_admin(db, admin, image_url)
     sign_JWT_admin(admin_obj.id, response)
     return {
         "message": f"Admin {admin_obj.first_name} {admin_obj.last_name} with id {admin_obj.id} has been created!"
