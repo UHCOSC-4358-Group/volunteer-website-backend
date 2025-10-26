@@ -40,7 +40,6 @@ def _volunteer_create_defaults(n: int) -> Dict[str, Any]:
         "first_name": f"First{n}",
         "last_name": f"Last{n}",
         "description": "test_volunteer",
-        "image_url": "x",
         "location": "Houston",
         "skills": ["x"],
         "available_times": [
@@ -85,7 +84,6 @@ def _admin_create_defaults(n: int) -> Dict[str, Any]:
         "first_name": f"First{n}",
         "last_name": f"Last{n}",
         "description": "test_admin",
-        "image_url": "x",
     }
 
 
@@ -99,7 +97,6 @@ def _org_create_defaults(n: int) -> Dict[str, Any]:
         "name": f"x{n}",
         "description": "test_organization",
         "location": "Houston",
-        "image_url": "x",
     }
 
 

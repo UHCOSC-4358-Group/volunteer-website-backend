@@ -19,7 +19,7 @@ from src.tests.database.conftest import Factories  # from tests/database/conftes
 
 def test_volunteer_signup(client: TestClient, db_session: Session, aws_s3: S3Client):
     FIRST_NAME = "VOLUNTEER"
-    volunteer_create = volunteer_factory.dict(name=FIRST_NAME)
+    volunteer_create = volunteer_factory.dict(first_name=FIRST_NAME)
 
     # Have to use json string since it's a multipart form
     json_str = json.dumps(volunteer_create)
@@ -35,10 +35,17 @@ def test_volunteer_signup(client: TestClient, db_session: Session, aws_s3: S3Cli
 
     assert resp.status_code == 201
 
+    found_volunteer = db_session.execute(
+        select(dbmodels.Volunteer).where(dbmodels.Volunteer.first_name == FIRST_NAME)
+    ).scalar_one_or_none()
+
+    assert found_volunteer is not None
+    assert found_volunteer.first_name == FIRST_NAME
+
     AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
 
     assert AWS_BUCKET_NAME is not None
-    assert len(aws_s3.list_objects_v2(Bucket=AWS_BUCKET_NAME)) > 0
+    assert aws_s3.list_objects_v2(Bucket=AWS_BUCKET_NAME).get("KeyCount", 0) == 1
 
     assert (
         db_session.execute(
@@ -84,20 +91,33 @@ def test_volunteer_login(client: TestClient, factories: Factories):
     assert decoded_cookie["userId"] == vol.id
 
 
-def test_admin_signup(client: TestClient, db_session: Session):
+def test_admin_signup(client: TestClient, db_session: Session, aws_s3: S3Client):
     FIRST_NAME = "ADMIN"
-    admin_create = admin_factory.dict(name=FIRST_NAME)
+    admin_create = admin_factory.dict(first_name=FIRST_NAME)
+    json_str = json.dumps(admin_create)
 
-    resp = client.post(f"/auth/org/signup", json=admin_create)
+    fake_image = BytesIO(b"fake image bytes")
+    fake_image.name = "profile.png"
+
+    resp = client.post(
+        f"/auth/org/signup",
+        data={"admin_str": json_str},
+        files={"image": ("profile.png", fake_image, "image/png")},
+    )
 
     assert resp.status_code == 201
 
-    assert (
-        db_session.execute(
-            select(dbmodels.OrgAdmin).where(dbmodels.OrgAdmin.first_name == FIRST_NAME)
-        )
-        is not None
-    )
+    found_admin = db_session.execute(
+        select(dbmodels.OrgAdmin).where(dbmodels.OrgAdmin.first_name == FIRST_NAME)
+    ).scalar_one_or_none()
+
+    assert found_admin is not None
+    assert found_admin.first_name == FIRST_NAME
+
+    AWS_BUCKET_NAME = os.getenv("AWS_BUCKET_NAME")
+
+    assert AWS_BUCKET_NAME is not None
+    assert aws_s3.list_objects_v2(Bucket=AWS_BUCKET_NAME).get("KeyCount", 0) == 1
 
 
 def test_admin_login(client: TestClient, factories: Factories):
