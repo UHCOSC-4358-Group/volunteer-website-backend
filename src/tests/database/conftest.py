@@ -1,10 +1,11 @@
 import itertools
 import pytest
+from datetime import date, time
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from typing import Any, Protocol
-from src.models import dbmodels
+from src.models import dbmodels, pydanticmodels
 
 
 class Factories(Protocol):
@@ -98,6 +99,9 @@ def factories(db_session: Session) -> Factories:
             "location": "Houston",
             "urgency": dbmodels.EventUrgency.LOW,
             "capacity": 5,
+            "day": date(2025, 12, 4),
+            "start_time": time(4, 30, 0),
+            "end_time": time(7, 30, 0),
             # org_id will be filled automatically if not provided
         }
 

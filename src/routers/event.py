@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from ..models import dbmodels
 from ..models.pydanticmodels import EventCreate, EventUpdate
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin, is_volunteer
 from ..dependencies.database.config import get_db
@@ -12,6 +13,7 @@ from ..dependencies.database.crud import (
 from ..dependencies.database.relations import (
     signup_volunteer_event,
     remove_volunteer_event,
+    match_volunteers_to_event,
 )
 from ..util.error import DatabaseError
 
@@ -150,4 +152,31 @@ async def event_volunteer_delete(
         raise HTTPException(
             exc.status_code,
             detail=f"Volunteer could not be deleted from event. {exc.detail}",
+        )
+
+
+@router.get("/{event_id}/match")
+async def event_volunteer_matching(
+    event_id: int,
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        if not is_admin(user_info):
+            raise HTTPException(403, "User is not an admin!")
+
+        admin_id = user_info.user_id
+
+        matched_results = match_volunteers_to_event(db, event_id, admin_id)
+
+        volunteers: list[dbmodels.Volunteer] = []
+        for volunteer, _ in matched_results:
+            volunteers.append(volunteer)
+
+        return volunteers
+
+    except (HTTPException, DatabaseError) as exc:
+        raise HTTPException(
+            exc.status_code,
+            detail=f"Could not retrieve volunteer matching info. {exc.detail}",
         )

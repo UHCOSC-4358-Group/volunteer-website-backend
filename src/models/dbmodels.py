@@ -6,6 +6,7 @@ from sqlalchemy import (
     CheckConstraint,
     Text,
     Time,
+    Date,
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import List
@@ -129,12 +130,16 @@ class Event(Base):
         CheckConstraint("capacity >= 0", name="ck_event_capacity_nonneg"),
         CheckConstraint("assigned >= 0", name="ck_event_assigned_nonneg"),
         CheckConstraint("assigned <= capacity", name="ck_event_assigned_le_capacity"),
+        CheckConstraint("start_time <= end_time", name="ck_event_has_nonneg_time"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
     location: Mapped[str] = mapped_column(String(255), nullable=False)
+    day: Mapped[Date] = mapped_column(Date)
+    start_time: Mapped[Time] = mapped_column(Time)
+    end_time: Mapped[Time] = mapped_column(Time)
     urgency: Mapped[EventUrgency] = mapped_column(
         SAEnum(EventUrgency, name="event_urgency_type"),
         default=EventUrgency.LOW,

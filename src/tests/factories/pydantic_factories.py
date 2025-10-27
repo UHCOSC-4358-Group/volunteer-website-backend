@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import itertools
 from typing import Any, Callable, Dict, Generic, Type, TypeVar
-from datetime import time
+from datetime import time, date
 
 from pydantic import BaseModel
 from src.models import pydanticmodels
@@ -68,6 +68,9 @@ def _event_create_defaults(n: int) -> Dict[str, Any]:
         # Pass a real org_id from your test when needed; default keeps it simple
         "org_id": 1,
         "needed_skills": ["x"],
+        "day": date(2025, 12, 4),
+        "start_time": time(4, 30, 0),
+        "end_time": time(7, 30, 0),
     }
 
 

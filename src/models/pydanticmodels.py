@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, field_validator, model_validator, EmailStr
 from enum import Enum
-from datetime import datetime, time
+from datetime import datetime, time, date
 
 
 class EventUrgency(str, Enum):
@@ -64,6 +64,9 @@ class EventCreate(BaseModel):
     needed_skills: list[str]
     urgency: EventUrgency
     capacity: int
+    day: date
+    start_time: time
+    end_time: time
     org_id: int
 
     @field_validator("capacity")
@@ -71,6 +74,12 @@ class EventCreate(BaseModel):
         if v <= 0:
             raise ValueError("Capacity must be positive")
         return v
+
+    @model_validator(mode="after")
+    def time_nonneg(self):
+        if self.start_time >= self.end_time:
+            raise ValueError("Time of Event must not be negative")
+        return self
 
 
 # This is for creating admins,

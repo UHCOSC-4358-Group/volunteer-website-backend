@@ -1,9 +1,11 @@
-from typing import Iterable
-from sqlalchemy import select
+from sqlalchemy import select, case, func, and_, literal, desc, Row
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels
 from ...util.error import DatabaseError
+from ...models import pydanticmodels  # added
+from typing import cast, Sequence, Tuple
+from datetime import date as Date
 
 
 def get_event_volunteer(db: Session, volunteer_id: int, event_id: int):
@@ -90,3 +92,82 @@ def remove_volunteer_event(db: Session, volunteer_id: int, event_id: int):
     except IntegrityError as exc:
         db.rollback()
         raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+
+
+def match_volunteers_to_event(db: Session, event_id: int, admin_id: int):
+    found_admin = db.get(dbmodels.OrgAdmin, admin_id)
+
+    if found_admin is None:
+        raise DatabaseError(404, "Authorized user could not be found!")
+
+    found_event = db.get(dbmodels.Event, event_id)
+
+    if found_event is None:
+        raise DatabaseError(404, "Event could not be found!")
+
+    SKILLS_TOTAL_WEIGHT = 2
+    LOCATION_TOTAL_WEIGHT = 4
+    SCHEDULE_TOTAL_WEIGHT = 4
+
+    # Count of matching skills per volunteer
+    skills_found_subquery = (
+        select(func.count())
+        .select_from(dbmodels.VolunteerSkill)
+        .where(dbmodels.VolunteerSkill.volunteer_id == dbmodels.Volunteer.id)
+        .where(
+            dbmodels.VolunteerSkill.skill.in_(
+                [s.skill for s in found_event.needed_skills]
+            )
+        )
+        .correlate(dbmodels.Volunteer)
+        .scalar_subquery()
+    )
+
+    # Caps at SKILLS_TOTAL_WEIGHT
+    skills_weight_expr = case(
+        (skills_found_subquery > SKILLS_TOTAL_WEIGHT, SKILLS_TOTAL_WEIGHT),
+        else_=skills_found_subquery,
+    )
+
+    # Check if location is the same
+    location_match_expression = case(
+        (
+            func.coalesce(dbmodels.Volunteer.location, "")
+            == func.coalesce(literal(found_event.location), ""),
+            LOCATION_TOTAL_WEIGHT,
+        ),
+        else_=0,
+    )
+
+    # Now, let's check if the schedules overlap at all
+    event_day: Date = cast(Date, found_event.day)
+    target_day = pydanticmodels.DayOfWeek(event_day.isoweekday())
+
+    schedules_overlap = (
+        select(literal(True))
+        .select_from(dbmodels.VolunteerAvailableTime)
+        .where(
+            and_(
+                dbmodels.VolunteerAvailableTime.volunteer_id == dbmodels.Volunteer.id,
+                dbmodels.VolunteerAvailableTime.day_of_week == target_day,
+                dbmodels.VolunteerAvailableTime.start_time <= found_event.end_time,
+                dbmodels.VolunteerAvailableTime.end_time >= found_event.start_time,
+            )
+        )
+        .correlate(dbmodels.Volunteer)
+        .exists()
+    )
+
+    schedules_overlap_expression = case(
+        (schedules_overlap, SCHEDULE_TOTAL_WEIGHT), else_=0
+    )
+
+    score_expr = (
+        location_match_expression + skills_weight_expr + schedules_overlap_expression
+    ).label("matching_score")
+
+    query = select(dbmodels.Volunteer, score_expr).order_by(desc(score_expr))
+
+    results: Sequence[Row[Tuple[dbmodels.Volunteer, int]]] = db.execute(query).all()
+
+    return results

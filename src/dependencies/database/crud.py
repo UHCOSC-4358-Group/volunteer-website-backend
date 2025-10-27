@@ -248,6 +248,9 @@ def create_org_event(db: Session, event: pydanticmodels.EventCreate, admin_id: i
         urgency=urgency,
         capacity=event.capacity,
         org_id=event.org_id,
+        day=event.day,
+        start_time=event.start_time,
+        end_time=event.end_time,
     )
 
     skills: Iterable[str] = getattr(event, "needed_skills", None) or []
