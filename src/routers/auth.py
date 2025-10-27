@@ -58,9 +58,7 @@ async def volunteer_signup(
 
     sign_JWT_volunteer(volunteer_obj.id, response)
 
-    return {
-        "message": f"Volunteer {volunteer_obj.first_name} {volunteer_obj.last_name} with id {volunteer_obj.id} has been created!"
-    }
+    return volunteer_obj
 
 
 class LoginData(BaseModel):
@@ -80,10 +78,11 @@ async def volunteer_login(
     if not verify_password(login_data.password, found_volunteer.password):
         raise HTTPException(401, "User or password incorrect!")
 
+    del found_volunteer.password
+
     sign_JWT_volunteer(found_volunteer.id, response)
-    return {
-        "message": f"Volunteer {found_volunteer.first_name} {found_volunteer.last_name} has been logged in!"
-    }
+
+    return found_volunteer
 
 
 @router.post("/org/signup", status_code=status.HTTP_201_CREATED)
@@ -102,9 +101,7 @@ async def admin_signup(
     admin.password = hash_password(admin.password)
     admin_obj = create_org_admin(db, admin, image_url)
     sign_JWT_admin(admin_obj.id, response)
-    return {
-        "message": f"Admin {admin_obj.first_name} {admin_obj.last_name} with id {admin_obj.id} has been created!"
-    }
+    return admin_obj
 
 
 @router.post("/org/login")
@@ -119,10 +116,12 @@ async def admin_login(
     if not verify_password(login_data.password, found_admin.password):
         raise HTTPException(401, "User or password incorrect!")
 
+    # Delete password so it isn't passed along
+    del found_admin.password
+
     sign_JWT_admin(found_admin.id, response)
-    return {
-        "message": f"Admin {found_admin.first_name} {found_admin.last_name} has been logged in!"
-    }
+
+    return found_admin
 
 
 @router.get("/vol")
@@ -153,3 +152,20 @@ async def get_admin(
         raise HTTPException(status_code=404, detail="Organization admin not found!")
 
     return found_admin
+
+
+@router.get("")
+async def get_user(
+    user_info: UserTokenInfo = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    try:
+        if is_volunteer(user_info):
+            return await get_volunteer(user_info, db)
+        elif is_admin(user_info):
+            return await get_admin(user_info, db)
+        else:
+            raise HTTPException(403, "User type not recognized!")
+    except HTTPException as exc:
+        raise HTTPException(
+            exc.status_code, f"Could not retrieve user info! {exc.detail}"
+        )

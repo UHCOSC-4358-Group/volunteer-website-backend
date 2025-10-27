@@ -49,6 +49,7 @@ def create_volunteer(
         db.rollback()
         raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(vol)
+    del vol.password
     return vol
 
 
@@ -74,6 +75,7 @@ def create_org_admin(
         db.rollback()
         raise DatabaseError(500, f"An error occured commiting to database! {exc}")
     db.refresh(admin)
+    del admin.password
     return admin
 
 
@@ -97,12 +99,18 @@ def get_current_volunteer(db: Session, id: int):
 
     current_volunteer = db.get(dbmodels.Volunteer, id)
 
+    if current_volunteer is not None:
+        del current_volunteer.password
+
     return current_volunteer
 
 
 def get_current_admin(db: Session, id: int):
 
     current_admin = db.get(dbmodels.OrgAdmin, id)
+
+    if current_admin is not None:
+        del current_admin.password
 
     return current_admin
 
