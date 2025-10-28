@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import NullPool
 from ..aws import create_bucket
 import os
 
@@ -18,8 +19,11 @@ import os
 # If you need schema examples, here's a link
 
 
-def build_sessionmaker(db_url: str):
-    engine = create_engine(db_url, pool_pre_ping=True)
+def build_sessionmaker(db_url: str, use_pooler: bool = False):
+    if use_pooler:
+        engine = create_engine(db_url, poolclass=NullPool)
+    else:
+        engine = create_engine(db_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     return engine, SessionLocal
 
@@ -32,13 +36,14 @@ async def lifespan(app: FastAPI):
     HOST = os.getenv("SUPABASE_HOST")
     PORT = os.getenv("SUPABASE_PORT")
     DB_NAME = os.getenv("SUPABASE_DB_NAME")
+    USE_POOLER = os.getenv("USE_SUPABASE_POOLER") == "true"
 
     if None in [USER, PASSWORD, HOST, PORT, DB_NAME]:
         raise RuntimeError("SQL URL not set")
 
     DATABASE_URL = f"postgresql+psycopg2://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB_NAME}?sslmode=require"
 
-    engine, SessionLocal = build_sessionmaker(DATABASE_URL)
+    engine, SessionLocal = build_sessionmaker(DATABASE_URL, use_pooler=USE_POOLER)
 
     Base.metadata.create_all(engine)
 
