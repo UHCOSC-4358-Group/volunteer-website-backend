@@ -171,3 +171,86 @@ def match_volunteers_to_event(db: Session, event_id: int, admin_id: int):
     results: Sequence[Row[Tuple[dbmodels.Volunteer, int]]] = db.execute(query).all()
 
     return results
+
+
+
+
+
+def match_events_to_volunteer(
+    db: Session,
+    volunteer_id: int,
+):
+
+    found_volunteer = db.get(dbmodels.Volunteer, volunteer_id)
+
+    if found_volunteer is None:
+        raise DatabaseError(404, "Volunteer could not be found!")
+
+    SKILLS_TOTAL_WEIGHT = 2
+    LOCATION_TOTAL_WEIGHT = 4
+    SCHEDULE_TOTAL_WEIGHT = 4
+
+    # Count of matching skills per event
+    skills_found_subquery = (
+        select(func.count())
+        .select_from(dbmodels.EventSkill)
+        .where(dbmodels.EventSkill.event_id == dbmodels.Event.id)
+        .where(
+            dbmodels.EventSkill.skill.in_(
+                [s.skill for s in found_volunteer.skills]
+            )
+        )
+        .correlate(dbmodels.Event)
+        .scalar_subquery()
+    )
+
+    # Caps at SKILLS_TOTAL_WEIGHT
+    skills_weight_expr = case(
+        (skills_found_subquery > SKILLS_TOTAL_WEIGHT, SKILLS_TOTAL_WEIGHT),
+        else_=skills_found_subquery,
+    )
+
+    # Check if location is the same (Event.location vs Volunteer.location)
+    location_match_expression = case(
+        (
+            func.coalesce(dbmodels.Event.location, "")
+            == func.coalesce(literal(found_volunteer.location), ""),
+            LOCATION_TOTAL_WEIGHT,
+        ),
+        else_=0,
+    )
+
+    # Check if schedules overlap:
+    # For each Event row, we check whether this volunteer has any weekly slot
+    # on the same ISO day-of-week that overlaps the event's time window.
+    schedules_overlap = (
+        select(literal(True))
+        .select_from(dbmodels.VolunteerAvailableTime)
+        .where(
+            and_(
+                dbmodels.VolunteerAvailableTime.volunteer_id == found_volunteer.id,
+                # isodow: Monday=1 .. Sunday=7, matches DayOfWeek enum values
+                dbmodels.VolunteerAvailableTime.day_of_week
+                == func.extract("isodow", dbmodels.Event.day),
+                dbmodels.VolunteerAvailableTime.start_time <= dbmodels.Event.end_time,
+                dbmodels.VolunteerAvailableTime.end_time >= dbmodels.Event.start_time,
+            )
+        )
+        .correlate(dbmodels.Event)
+        .exists()
+    )
+
+    schedules_overlap_expression = case(
+        (schedules_overlap, SCHEDULE_TOTAL_WEIGHT), else_=0
+    )
+
+    score_expr = (
+        location_match_expression + skills_weight_expr + schedules_overlap_expression
+    ).label("matching_score")
+
+    # Rank Events for this volunteer by the computed score
+    query = select(dbmodels.Event, score_expr).order_by(desc(score_expr))
+
+    results: Sequence[Row[Tuple[dbmodels.Event, int]]] = db.execute(query).all()
+
+    return results
