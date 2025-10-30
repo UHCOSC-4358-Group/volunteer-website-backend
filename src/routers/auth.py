@@ -89,7 +89,7 @@ async def volunteer_login(
 async def admin_signup(
     response: Response,
     admin_str: str = Form(json_schema_extra=AdminCreate.model_json_schema()),
-    image: UploadFile = File(default=None),
+    image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):

@@ -17,6 +17,12 @@ Base = declarative_base()
 
 class Volunteer(Base):
     __tablename__ = "volunteer"
+    __table_args__ = (
+        CheckConstraint(
+            "user_type = 'volunteer'", name="ck_user_type_must_be_volunteer"
+        ),
+    )
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -25,6 +31,9 @@ class Volunteer(Base):
     description: Mapped[str] = mapped_column(Text)
     image_url: Mapped[str] = mapped_column(String(512), nullable=True)
     location: Mapped[str] = mapped_column(String(255))
+    user_type: Mapped[str] = mapped_column(
+        String(9), default="volunteer", server_default="volunteer"
+    )
 
     # One-to-many: Volunteer -> VolunteerSkill
     skills: Mapped[List["VolunteerSkill"]] = relationship(
@@ -106,6 +115,9 @@ class Organization(Base):
 
 class OrgAdmin(Base):
     __tablename__ = "organization_admin"
+    __table_args__ = (
+        CheckConstraint("user_type = 'admin'", name="ck_user_type_must_be_admin"),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     password: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -113,6 +125,9 @@ class OrgAdmin(Base):
     last_name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(Text)
     image_url: Mapped[str] = mapped_column(String(512), nullable=True)
+    user_type: Mapped[str] = mapped_column(
+        String(5), default="admin", server_default="admin"
+    )
     # org_id is set to NULL when organization is deleted
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organization.id", ondelete="SET NULL"),
