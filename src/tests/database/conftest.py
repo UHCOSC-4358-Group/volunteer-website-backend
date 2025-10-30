@@ -72,6 +72,7 @@ def factories(db_session: Session) -> Factories:
             "description": "",
             "image_url": "",
             "location": "Houston",
+            "date_of_birth": date(2002, 11, 11),
         }
 
     def _admin_defaults(n: int) -> dict[str, Any]:
@@ -82,6 +83,7 @@ def factories(db_session: Session) -> Factories:
             "last_name": f"Last{n}",
             "description": "",
             "image_url": "",
+            "date_of_birth": date(2002, 11, 11),
         }
 
     def _organization_defaults(n: int) -> dict[str, Any]:

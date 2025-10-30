@@ -49,6 +49,7 @@ def _volunteer_create_defaults(n: int) -> Dict[str, Any]:
                 end=time(17, 0, 0),
             ),
         ],
+        "date_of_birth": date(2002, 2, 23),
     }
 
 
@@ -87,6 +88,7 @@ def _admin_create_defaults(n: int) -> Dict[str, Any]:
         "first_name": f"First{n}",
         "last_name": f"Last{n}",
         "description": "test_admin",
+        "date_of_birth": date(2002, 11, 1),
     }
 
 

@@ -26,6 +26,7 @@ def create_volunteer(
         description=new_volunteer.description,
         image_url=image_url,
         location=new_volunteer.location,
+        date_of_birth=new_volunteer.date_of_birth,
     )
 
     skills: Iterable[str] = getattr(new_volunteer, "skills", None) or []
@@ -66,6 +67,7 @@ def create_org_admin(
         last_name=new_admin.last_name,
         description=new_admin.description,
         image_url=image_url,
+        date_of_birth=new_admin.date_of_birth,
     )
 
     db.add(admin)

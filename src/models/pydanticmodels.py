@@ -91,6 +91,16 @@ class AdminCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
+    date_of_birth: date
+
+    @field_validator("date_of_birth")
+    def validate_over_18(cls, v: date):
+        today = datetime.now().date()
+        ago = date(today.year - 18, today.month, today.day)
+
+        if v > ago:
+            raise ValueError("User is not 18 years or older!")
+        return v
 
 
 class AvailableTime(BaseModel):
@@ -122,6 +132,7 @@ class VolunteerCreate(BaseModel):
     first_name: str = Field(min_length=1, max_length=40)
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
+    date_of_birth: date
     location: str
     skills: list[str]
     available_times: list[AvailableTime] = Field(
@@ -133,6 +144,15 @@ class VolunteerCreate(BaseModel):
             ]
         },
     )
+
+    @field_validator("date_of_birth")
+    def validate_over_18(cls, v: date):
+        today = datetime.now().date()
+        ago = date(today.year - 18, today.month, today.day)
+
+        if v > ago:
+            raise ValueError("User is not 18 years or older!")
+        return v
 
     @model_validator(mode="after")
     def validate_non_overlapping(self):

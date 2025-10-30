@@ -34,6 +34,7 @@ class Volunteer(Base):
     user_type: Mapped[str] = mapped_column(
         String(9), default="volunteer", server_default="volunteer"
     )
+    date_of_birth: Mapped[Date] = mapped_column(Date)
 
     # One-to-many: Volunteer -> VolunteerSkill
     skills: Mapped[List["VolunteerSkill"]] = relationship(
@@ -128,6 +129,7 @@ class OrgAdmin(Base):
     user_type: Mapped[str] = mapped_column(
         String(5), default="admin", server_default="admin"
     )
+    date_of_birth: Mapped[Date] = mapped_column(Date)
     # org_id is set to NULL when organization is deleted
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organization.id", ondelete="SET NULL"),
