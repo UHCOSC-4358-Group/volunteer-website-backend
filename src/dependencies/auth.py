@@ -39,6 +39,8 @@ def verify_password(plaintext_pw: str, hashed_pw: str) -> bool:
 # Signs the JWT string
 def sign_JWT_admin(userId: int, response: Response):
     payload = {"userId": userId, "expires": time.time() + 3600, "userType": "admin"}
+    if JWT_SECRET is None:
+        raise HTTPException(500, "Environemnt credentials are not loaded!")
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie("access_token", token, httponly=True)
     return response
@@ -46,6 +48,8 @@ def sign_JWT_admin(userId: int, response: Response):
 
 def sign_JWT_volunteer(userId: int, response: Response):
     payload = {"userId": userId, "expires": time.time() + 3600, "userType": "volunteer"}
+    if JWT_SECRET is None:
+        raise HTTPException(500, "Environemnt credentials are not loaded!")
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie("access_token", token, httponly=True)
     return response
@@ -53,10 +57,14 @@ def sign_JWT_volunteer(userId: int, response: Response):
 
 def decodeJWT(token: str):
     try:
+        if JWT_SECRET is None:
+            raise HTTPException(500, "Environemnt credentials are not loaded!")
         decoded_token = jwt.decode(token, JWT_SECRET, algorithms=ALGORITHMS)
         # Use the correct key set by sign_JWT_* ("expires"), fall back permissively in tests
         exp = decoded_token.get("expires")
         return decoded_token if exp >= time.time() else None
+    except HTTPException as exc:
+        raise exc
     except:
         raise HTTPException(status_code=403, detail="Bad token credentials!")
 
