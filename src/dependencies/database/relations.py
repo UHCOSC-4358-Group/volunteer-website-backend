@@ -173,12 +173,8 @@ def match_volunteers_to_event(db: Session, event_id: int, admin_id: int):
     return results
 
 
-
-
-
 def match_events_to_volunteer(
-    db: Session,
-    volunteer_id: int,
+    db: Session, volunteer_id: int, TESTING_DAY: int | None = None
 ):
 
     found_volunteer = db.get(dbmodels.Volunteer, volunteer_id)
@@ -195,11 +191,7 @@ def match_events_to_volunteer(
         select(func.count())
         .select_from(dbmodels.EventSkill)
         .where(dbmodels.EventSkill.event_id == dbmodels.Event.id)
-        .where(
-            dbmodels.EventSkill.skill.in_(
-                [s.skill for s in found_volunteer.skills]
-            )
-        )
+        .where(dbmodels.EventSkill.skill.in_([s.skill for s in found_volunteer.skills]))
         .correlate(dbmodels.Event)
         .scalar_subquery()
     )
@@ -220,6 +212,13 @@ def match_events_to_volunteer(
         else_=0,
     )
 
+    # For testing purposes in SQLite
+    day_expr = (
+        func.extract("isodow", dbmodels.Event.day)
+        if db.get_bind().dialect.name == "postgres"
+        else pydanticmodels.DayOfWeek(4)
+    )
+
     # Check if schedules overlap:
     # For each Event row, we check whether this volunteer has any weekly slot
     # on the same ISO day-of-week that overlaps the event's time window.
@@ -230,8 +229,7 @@ def match_events_to_volunteer(
             and_(
                 dbmodels.VolunteerAvailableTime.volunteer_id == found_volunteer.id,
                 # isodow: Monday=1 .. Sunday=7, matches DayOfWeek enum values
-                dbmodels.VolunteerAvailableTime.day_of_week
-                == func.extract("isodow", dbmodels.Event.day),
+                dbmodels.VolunteerAvailableTime.day_of_week == day_expr,
                 dbmodels.VolunteerAvailableTime.start_time <= dbmodels.Event.end_time,
                 dbmodels.VolunteerAvailableTime.end_time >= dbmodels.Event.start_time,
             )

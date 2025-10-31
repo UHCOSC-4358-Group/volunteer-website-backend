@@ -185,3 +185,105 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
             assert score == 4
         elif volunteer.first_name == "volunteer3":
             assert score == 0
+
+
+class Test_Match_Events_to_Volunteer:
+    __test__ = False
+
+    def __init__(
+        self,
+        name: str,
+        date: date,
+        start_time: time,
+        end_time: time,
+        location: str,
+        needed_skills: list[str],
+    ) -> None:
+        self.name = name
+        self.date = date
+        self.start_time = start_time
+        self.end_time = end_time
+        self.location = location
+        self.needed_skills = needed_skills
+
+
+def test_match_events_to_volunteer(db_session: Session, factories: Factories):
+    events: list[Test_Match_Events_to_Volunteer] = [
+        # Should match everything
+        Test_Match_Events_to_Volunteer(
+            "Food Bank Help",
+            date(2025, 12, 4),  # Thursday
+            time(4, 30, 0),
+            time(6, 0, 0),
+            "Houston",
+            ["Cooking", "Cleaning"],
+        ),
+        # Shouldn't match skills
+        Test_Match_Events_to_Volunteer(
+            "Handicap Assistance for Voting",
+            date(2025, 12, 4),
+            time(4, 30, 0),
+            time(6, 0, 0),
+            "Houston",
+            [],
+        ),
+        # Shouldn't match skills and location
+        Test_Match_Events_to_Volunteer(
+            "Community Assistance",
+            date(2025, 12, 4),
+            time(4, 30, 0),
+            time(6, 0, 0),
+            "Dallas",
+            [],
+        ),
+        # Shouldn't match anything, period
+        Test_Match_Events_to_Volunteer(
+            "Cookfest",
+            date(2025, 12, 4),
+            time(17, 30, 0),
+            time(20, 0, 0),
+            "Dallas",
+            [],
+        ),
+    ]
+
+    org = factories.organization()
+    for event_object in events:
+        new_event = factories.event(
+            org=org,
+            name=event_object.name,
+            day=event_object.date,
+            start_time=event_object.start_time,
+            end_time=event_object.end_time,
+            location=event_object.location,
+        )
+
+        for s in event_object.needed_skills:
+            new_event.needed_skills.append(dbmodels.EventSkill(skill=s))
+
+    db_session.commit()
+
+    volunteer = factories.volunteer(location="Houston")
+    volunteer.times_available.append(
+        dbmodels.VolunteerAvailableTime(
+            day_of_week=dbmodels.DayOfWeek.THURSDAY,
+            start_time=time(4, 0, 0),
+            end_time=time(8, 0, 0),
+        )
+    )
+    volunteer.skills.append(dbmodels.VolunteerSkill(skill="Cooking"))
+    volunteer.skills.append(dbmodels.VolunteerSkill(skill="Cleaning"))
+
+    db_session.commit()
+
+    results = relations.match_events_to_volunteer(db_session, volunteer.id)
+
+    for event, score in results:
+        if event.name == "Food Bank Help":
+            assert score == 10
+        if event.name == "Handicap Assistance for Voting":
+            assert score == 8
+        if event.name == "Community Assistance":
+            assert score == 4
+        if event.name == "Cookfest":
+            assert score == 0
