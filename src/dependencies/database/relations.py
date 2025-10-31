@@ -252,3 +252,36 @@ def match_events_to_volunteer(
     results: Sequence[Row[Tuple[dbmodels.Event, int]]] = db.execute(query).all()
 
     return results
+
+
+def get_volunteer_history(db: Session, volunteer_id: int):
+    """
+    SELECT *
+    FROM volunteer
+    JOIN event_volunteer ON volunteer_id = event_volunteer.volunteer_id
+    JOIN event ON event_volunteer.event.id = event.id
+    WHERE event.date < CURRENT_DATE AND event.end_time < CURRENT_TIME
+
+    E.g.:
+
+    stmt = select(user_table).join(
+        address_table, user_table.c.id == address_table.c.user_id
+    )
+
+    """
+
+    query = (
+        select(dbmodels.Event)
+        .join(
+            dbmodels.EventVolunteer,
+            dbmodels.Volunteer.id == dbmodels.EventVolunteer.volunteer_id,
+        )
+        .join(dbmodels.Event, dbmodels.EventVolunteer.event_id == dbmodels.Event.id)
+        .where(dbmodels.Volunteer.id == volunteer_id)
+        .where(dbmodels.Event.day < func.current_date())
+        .where(dbmodels.Event.end_time < func.current_time())
+    )
+
+    volunteer_history = db.execute(query).all()
+
+    return volunteer_history

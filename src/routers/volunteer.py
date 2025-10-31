@@ -5,10 +5,14 @@ from sqlalchemy.orm import Session
 
 from ..dependencies.database.config import get_db
 from ..dependencies.auth import get_current_user, is_admin, UserTokenInfo
-from ..dependencies.database.relations import match_events_to_volunteer
+from ..dependencies.database.relations import (
+    match_events_to_volunteer,
+    get_volunteer_history,
+)
 from ..models import dbmodels
 
 router = APIRouter(prefix="/vol", tags=["volunteer"])
+
 
 @router.get("/{volunteer_id}/match")
 def volunteer_event_matches(
@@ -24,9 +28,11 @@ def volunteer_event_matches(
     - Admin may view any volunteer's matches.
     """
     # authorize
-    same_user = str(getattr(user, "user_id", "")) == str(volunteer_id)
+    same_user = user.user_id == volunteer_id
     if not (is_admin(user) or same_user):
-        raise HTTPException(status_code=403, detail="Not authorized to view these recommendations")
+        raise HTTPException(
+            status_code=403, detail="Not authorized to view these recommendations"
+        )
 
     # compute matches
     scored = match_events_to_volunteer(db, volunteer_id)
@@ -34,18 +40,32 @@ def volunteer_event_matches(
     # shape response
     matches: List[Dict[str, Any]] = []
     for event, score in scored[:top_k]:
-        matches.append({
-            "event_id": event.id,
-            "name": event.name,
-            "location": event.location,
-            "day": event.day.isoformat() if event.day else None,
-            "start_time": event.start_time.isoformat() if event.start_time else None,
-            "end_time": event.end_time.isoformat() if event.end_time else None,
-            "urgency": str(event.urgency),
-            "needed_skills": [s.skill for s in (event.needed_skills or [])],
-            "capacity": event.capacity,
-            "assigned": event.assigned,
-            "score": float(score),
-        })
+        matches.append(
+            {
+                "event_id": event.id,
+                "name": event.name,
+                "location": event.location,
+                "day": event.day.isoformat() if event.day else None,
+                "start_time": (
+                    event.start_time.isoformat() if event.start_time else None
+                ),
+                "end_time": event.end_time.isoformat() if event.end_time else None,
+                "urgency": str(event.urgency),
+                "needed_skills": [s.skill for s in (event.needed_skills or [])],
+                "capacity": event.capacity,
+                "assigned": event.assigned,
+                "score": float(score),
+            }
+        )
 
     return {"volunteer_id": volunteer_id, "count": len(matches), "matches": matches}
+
+
+@router.get("/{volunteer_id}/history")
+def volunteer_history(
+    volunteer_id: int,
+    db: Session = Depends(get_db),
+):
+    past_events = get_volunteer_history(db, volunteer_id)
+
+    return past_events
