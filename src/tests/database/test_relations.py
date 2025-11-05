@@ -187,7 +187,7 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
             assert score == 0
 
 
-class Test_Match_Events_to_Volunteer:
+class Test_Event_Type_Helper:
     __test__ = False
 
     def __init__(
@@ -208,9 +208,9 @@ class Test_Match_Events_to_Volunteer:
 
 
 def test_match_events_to_volunteer(db_session: Session, factories: Factories):
-    events: list[Test_Match_Events_to_Volunteer] = [
+    events: list[Test_Event_Type_Helper] = [
         # Should match everything
-        Test_Match_Events_to_Volunteer(
+        Test_Event_Type_Helper(
             "Food Bank Help",
             date(2025, 12, 4),  # Thursday
             time(4, 30, 0),
@@ -219,7 +219,7 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
             ["Cooking", "Cleaning"],
         ),
         # Shouldn't match skills
-        Test_Match_Events_to_Volunteer(
+        Test_Event_Type_Helper(
             "Handicap Assistance for Voting",
             date(2025, 12, 4),
             time(4, 30, 0),
@@ -228,7 +228,7 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
             [],
         ),
         # Shouldn't match skills and location
-        Test_Match_Events_to_Volunteer(
+        Test_Event_Type_Helper(
             "Community Assistance",
             date(2025, 12, 4),
             time(4, 30, 0),
@@ -237,7 +237,7 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
             [],
         ),
         # Shouldn't match anything, period
-        Test_Match_Events_to_Volunteer(
+        Test_Event_Type_Helper(
             "Cookfest",
             date(2025, 12, 4),
             time(17, 30, 0),
@@ -287,3 +287,74 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
             assert score == 4
         if event.name == "Cookfest":
             assert score == 0
+
+
+def test_get_volunteer_history(db_session: Session, factories: Factories):
+    events_obj: list[Test_Event_Type_Helper] = [
+        # Shouldn't match either
+        Test_Event_Type_Helper(
+            "Food Bank Help",
+            date(2025, 12, 4),  # Thursday
+            time(11, 30, 0),
+            time(14, 0, 0),
+            "Houston",
+            [],
+        ),
+        # Same day, but should match due to time
+        Test_Event_Type_Helper(
+            "Handicap Assistance for Voting",
+            date(2025, 11, 4),
+            time(5, 30, 0),
+            time(6, 0, 0),
+            "Houston",
+            [],
+        ),
+        # November 4th, 4:30 - 6
+        Test_Event_Type_Helper(
+            "Community Assistance",
+            date(2025, 11, 4),
+            time(4, 30, 0),
+            time(6, 0, 0),
+            "Houston",
+            [],
+        ),
+        # November 4th, 17:30 - 20
+        Test_Event_Type_Helper(
+            "Cookfest",
+            date(2025, 11, 4),
+            time(17, 30, 0),
+            time(20, 0, 0),
+            "Houston",
+            [],
+        ),
+    ]
+
+    events = []
+
+    org = factories.organization()
+    for event_object in events_obj:
+        new_event = factories.event(
+            org=org,
+            name=event_object.name,
+            day=event_object.date,
+            start_time=event_object.start_time,
+            end_time=event_object.end_time,
+            location=event_object.location,
+        )
+
+        for s in event_object.needed_skills:
+            new_event.needed_skills.append(dbmodels.EventSkill(skill=s))
+
+        events.append(new_event)
+
+    db_session.commit()
+
+    volunteer = factories.volunteer()
+    for e in events:
+        volunteer.events.append(dbmodels.EventVolunteer(event=e))
+
+    db_session.commit()
+
+    results = relations.get_volunteer_history(db_session, volunteer.id)
+
+    assert len(results) == 3

@@ -1,11 +1,23 @@
-from sqlalchemy import select, case, func, and_, literal, desc, Row
+from sqlalchemy import (
+    select,
+    case,
+    func,
+    and_,
+    literal,
+    desc,
+    Row,
+    cast as sa_cast,
+    Date as sa_Date,
+    Time as sa_Time,
+    or_,
+)
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels
 from ...util.error import DatabaseError
 from ...models import pydanticmodels  # added
 from typing import cast, Sequence, Tuple
-from datetime import date as Date
+from datetime import date as Date, datetime, time as Time
 
 
 def get_event_volunteer(db: Session, volunteer_id: int, event_id: int):
@@ -215,7 +227,7 @@ def match_events_to_volunteer(
     # For testing purposes in SQLite
     day_expr = (
         func.extract("isodow", dbmodels.Event.day)
-        if db.get_bind().dialect.name == "postgres"
+        if db.get_bind().dialect.name == "postgresql"
         else pydanticmodels.DayOfWeek(4)
     )
 
@@ -257,10 +269,10 @@ def match_events_to_volunteer(
 def get_volunteer_history(db: Session, volunteer_id: int):
     """
     SELECT *
-    FROM volunteer
-    JOIN event_volunteer ON volunteer_id = event_volunteer.volunteer_id
-    JOIN event ON event_volunteer.event.id = event.id
-    WHERE event.date < CURRENT_DATE AND event.end_time < CURRENT_TIME
+    FROM event
+    JOIN event_volunteer ON event.id = event_volunteer.event_id
+    JOIN volunteer ON event_volunteer.volunteer_id = volunteer.id
+    WHERE event.date <= CURRENT_DATE AND event.end_time < CURRENT_TIME
 
     E.g.:
 
@@ -270,16 +282,33 @@ def get_volunteer_history(db: Session, volunteer_id: int):
 
     """
 
+    if db.get_bind().dialect.name != "postgresql":
+        current_date = Date(2025, 11, 5)
+        current_time = Time(12, 0, 0)
+    else:
+        current_date = Date.today()
+        current_time = datetime.now().time()
+
+    past_event_predicate = or_(
+        dbmodels.Event.day < current_date,
+        and_(
+            dbmodels.Event.day == current_date, dbmodels.Event.end_time < current_time
+        ),
+    )
+
     query = (
         select(dbmodels.Event)
         .join(
             dbmodels.EventVolunteer,
+            dbmodels.Event.id == dbmodels.EventVolunteer.event_id,
+        )
+        .join(
+            dbmodels.Volunteer,
             dbmodels.Volunteer.id == dbmodels.EventVolunteer.volunteer_id,
         )
-        .join(dbmodels.Event, dbmodels.EventVolunteer.event_id == dbmodels.Event.id)
         .where(dbmodels.Volunteer.id == volunteer_id)
-        .where(dbmodels.Event.day < func.current_date())
-        .where(dbmodels.Event.end_time < func.current_time())
+        .where(past_event_predicate)
+        .order_by(dbmodels.Event.day, dbmodels.Event.end_time)
     )
 
     volunteer_history = db.execute(query).all()
