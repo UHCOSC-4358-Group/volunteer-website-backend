@@ -32,7 +32,7 @@ app.exception_handler(RequestValidationError)(validation_exception_error)
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # FIXME: CHANGE FOR PRODUCTION LATER
+    allow_origins=["http://localhost:5173"],  # FIXME: CHANGE FOR PRODUCTION LATER
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

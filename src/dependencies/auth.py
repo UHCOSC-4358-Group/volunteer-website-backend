@@ -38,20 +38,36 @@ def verify_password(plaintext_pw: str, hashed_pw: str) -> bool:
 
 # Signs the JWT string
 def sign_JWT_admin(userId: int, response: Response):
-    payload = {"userId": userId, "expires": time.time() + 3600, "userType": "admin"}
+    payload = {"userId": userId, "exp": time.time() + 3600, "userType": "admin"}
     if JWT_SECRET is None:
         raise HTTPException(500, "Environemnt credentials are not loaded!")
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
-    response.set_cookie("access_token", token, httponly=True)
+    response.set_cookie(
+        "access_token",
+        token,
+        httponly=True,
+        max_age=3600,
+        path="/",
+        samesite="none",
+        secure=False,
+    )
     return response
 
 
 def sign_JWT_volunteer(userId: int, response: Response):
-    payload = {"userId": userId, "expires": time.time() + 3600, "userType": "volunteer"}
+    payload = {"userId": userId, "exp": time.time() + 3600, "userType": "volunteer"}
     if JWT_SECRET is None:
-        raise HTTPException(500, "Environemnt credentials are not loaded!")
+        raise HTTPException(500, "Environment credentials are not loaded!")
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
-    response.set_cookie("access_token", token, httponly=True)
+    response.set_cookie(
+        "access_token",
+        token,
+        httponly=True,
+        max_age=3600,
+        path="/",
+        samesite="lax",
+        secure=False,
+    )
     return response
 
 
@@ -60,9 +76,9 @@ def decodeJWT(token: str):
         if JWT_SECRET is None:
             raise HTTPException(500, "Environemnt credentials are not loaded!")
         decoded_token = jwt.decode(token, JWT_SECRET, algorithms=ALGORITHMS)
-        # Use the correct key set by sign_JWT_* ("expires"), fall back permissively in tests
-        exp = decoded_token.get("expires")
-        return decoded_token if exp >= time.time() else None
+        return decoded_token
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=403, detail="Token has expired!")
     except HTTPException as exc:
         raise exc
     except:
