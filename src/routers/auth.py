@@ -169,3 +169,9 @@ async def get_user(
         raise HTTPException(
             exc.status_code, f"Could not retrieve user info! {exc.detail}"
         )
+
+
+@router.post("/logout")
+async def logout(response: Response):
+    response.delete_cookie("access_token")
+    return {"message": "Successfully logged out!"}
