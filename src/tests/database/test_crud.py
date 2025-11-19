@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from src.dependencies.database import crud
 from src.models import pydanticmodels, dbmodels
-from src.util.error import DatabaseError
+from src.util import error
 from src.tests.database.conftest import Factories
 from src.tests.factories.pydantic_factories import volunteer, event, admin, org
 
@@ -37,7 +37,7 @@ def test_create_volunteer_with_integrity_error(db_session: Session):
         "commit",
         side_effect=IntegrityError("stmt", "params", RuntimeError()),
     ):
-        with pytest.raises(DatabaseError):
+        with pytest.raises(error.DatabaseOperationError):
             crud.create_org_admin(db_session, org_admin)
 
     # Check that db rolled back correctly by checking if admin is in db
@@ -135,7 +135,7 @@ def test_create_new_org(db_session: Session, factories: Factories):
 
     # Fake admin Id
     FAKE_ADMIN_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.create_new_org(db_session, org_create, FAKE_ADMIN_ID)
 
     assert exc.value.status_code == 404
@@ -159,21 +159,21 @@ def test_delete_org(db_session: Session, factories: Factories):
 
     # Fake admin id
     FAKE_ADMIN_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.delete_org(db_session, org_id, FAKE_ADMIN_ID)
 
     assert exc.value.status_code == 404
 
     # Fake org id
     FAKE_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.delete_org(db_session, FAKE_ID, admin_obj.id)
 
     assert exc.value.status_code == 404
 
     # Non authorized admin
     non_auth_admin = factories.admin()
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.AuthorizationError) as exc:
         crud.delete_org(db_session, org_id, non_auth_admin.id)
 
     assert exc.value.status_code == 403
@@ -245,21 +245,21 @@ def test_update_org(db_session: Session, factories: Factories):
 
     # Fake org id
     FAKE_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.update_org(db_session, FAKE_ID, org_updates, admin_obj.id)
 
     assert exc.value.status_code == 404
 
     # Fake admin id
     ADMIN_FAKE_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.update_org(db_session, org_id, org_updates, ADMIN_FAKE_ID)
 
     assert exc.value.status_code == 404
 
     # Non authorized admin
     non_auth_admin = factories.admin()
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.AuthorizationError) as exc:
         crud.update_org(db_session, org_id, org_updates, non_auth_admin.id)
 
     assert exc.value.status_code == 403
@@ -301,14 +301,14 @@ def test_create_org_event(db_session: Session, factories: Factories):
 
     # Fake admin id
     ADMIN_FAKE_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.create_org_event(db_session, event_create_obj, ADMIN_FAKE_ID)
 
     assert exc.value.status_code == 404
 
     # Admin not apart of org
     non_auth_admin = factories.admin()
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.AuthorizationError) as exc:
         crud.create_org_event(db_session, event_create_obj, non_auth_admin.id)
 
     assert exc.value.status_code == 403
@@ -316,7 +316,7 @@ def test_create_org_event(db_session: Session, factories: Factories):
     # Fake organization id
     ORGANIZATION_FAKE_ID = -5
     fake_org_create = event.build(org=ORGANIZATION_FAKE_ID)
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.create_org_event(db_session, fake_org_create, ORGANIZATION_FAKE_ID)
 
     assert exc.value.status_code == 404
@@ -398,7 +398,7 @@ def test_update_org_event(db_session: Session, factories: Factories):
 
     # Fake event id
     EVENT_FAKE_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.update_org_event(
             db_session, EVENT_FAKE_ID, event_updates_obj, org_admin.id
         )
@@ -407,7 +407,7 @@ def test_update_org_event(db_session: Session, factories: Factories):
 
     # Fake admin id
     ADMIN_FAKE_ID = -5
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.update_org_event(
             db_session, event_to_be_updated.id, event_updates_obj, ADMIN_FAKE_ID
         )
@@ -416,7 +416,7 @@ def test_update_org_event(db_session: Session, factories: Factories):
 
     # Admin not apart of org
     non_auth_admin = factories.admin()
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.AuthorizationError) as exc:
         crud.update_org_event(
             db_session, event_to_be_updated.id, event_updates_obj, non_auth_admin.id
         )
@@ -439,7 +439,7 @@ def test_delete_org_event(db_session: Session, factories: Factories):
     # Fake event id
     EVENT_FAKE_ID = -5
 
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.delete_org_event(db_session, EVENT_FAKE_ID, org_admin.id)
 
     assert exc.value.status_code == 404
@@ -447,7 +447,7 @@ def test_delete_org_event(db_session: Session, factories: Factories):
     # Fake admin id
     ADMIN_FAKE_ID = -5
 
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.NotFoundError) as exc:
         crud.delete_org_event(db_session, event_to_be_deleted.id, ADMIN_FAKE_ID)
 
     assert exc.value.status_code == 404
@@ -455,7 +455,7 @@ def test_delete_org_event(db_session: Session, factories: Factories):
     # Admin not apart of org
     not_auth_admin = factories.admin()
 
-    with pytest.raises(DatabaseError) as exc:
+    with pytest.raises(error.AuthorizationError) as exc:
         crud.delete_org_event(db_session, event_to_be_deleted.id, not_auth_admin.id)
 
     assert exc.value.status_code == 403

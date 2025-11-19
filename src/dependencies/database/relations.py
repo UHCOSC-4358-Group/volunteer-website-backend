@@ -14,7 +14,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels
-from ...util.error import DatabaseError
+from ...util import error
 from ...models import pydanticmodels  # added
 from typing import cast, Sequence, Tuple
 from datetime import date as Date, datetime, time as Time
@@ -31,15 +31,15 @@ def signup_org_admin(db: Session, org_id: int, admin_id: int):
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+        raise error.NotFoundError("admin", admin_id)
 
     found_org = db.get(dbmodels.Organization, org_id)
 
     if found_org is None:
-        raise DatabaseError(404, f"Organization with id {org_id} not found!")
+        raise error.NotFoundError("organization", org_id)
 
     if found_admin in found_org.admins:
-        raise DatabaseError(409, "Admin already in organization!")
+        raise error.ConflictError("Admin already in organization")
 
     found_org.admins.append(found_admin)
 
@@ -47,7 +47,7 @@ def signup_org_admin(db: Session, org_id: int, admin_id: int):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("signup_org_admin", str(exc))
 
 
 def signup_volunteer_event(db: Session, volunteer_id: int, event_id: int):
@@ -55,19 +55,21 @@ def signup_volunteer_event(db: Session, volunteer_id: int, event_id: int):
     found_volunteer = db.get(dbmodels.Volunteer, volunteer_id)
 
     if found_volunteer is None:
-        raise DatabaseError(404, f"Volunteer with id {volunteer_id} not found!")
+        raise error.NotFoundError("volunteer", volunteer_id)
 
     found_event = db.get(dbmodels.Event, event_id)
 
     if found_event is None:
-        raise DatabaseError(404, f"Event with id {event_id} not found!")
+        raise error.NotFoundError("event", event_id)
 
     existing = db.get(dbmodels.EventVolunteer, (event_id, volunteer_id))
     if existing is not None:
-        raise DatabaseError(409, "Volunteer already signed up to event!")
+        raise error.ConflictError("Volunteer already signed up to event")
 
     if found_event.assigned >= found_event.capacity:
-        raise DatabaseError(400, "Event is full capacity!")
+        raise error.ValidationError(
+            "Invalid join request", {"capacity": "Event is at full capacity!"}
+        )
 
     new_volunteer_event = dbmodels.EventVolunteer(
         volunteer=found_volunteer, event=found_event
@@ -81,19 +83,22 @@ def signup_volunteer_event(db: Session, volunteer_id: int, event_id: int):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("signup_volunteer_event", str(exc))
 
 
 def remove_volunteer_event(db: Session, volunteer_id: int, event_id: int):
     event_volunteer = db.get(dbmodels.EventVolunteer, (event_id, volunteer_id))
 
     if event_volunteer is None:
-        raise DatabaseError(404, "Volunteer is not assigned to Event!")
+        raise error.NotFoundError(
+            "event_volunteer", f"Volunteer id: ${volunteer_id}, Event id: ${event_id}"
+        )
 
     event = event_volunteer.event
 
+    # This is more of a server side error, but we'll see how it plays out client-side
     if event.assigned <= 0:
-        raise DatabaseError(400, "Event has 0 assigned volunteers!")
+        raise error.ValidationError("Event already has 0 volunteers!")
 
     event.assigned -= 1
 
@@ -103,19 +108,19 @@ def remove_volunteer_event(db: Session, volunteer_id: int, event_id: int):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("remove_volunteer_event", str(exc))
 
 
 def match_volunteers_to_event(db: Session, event_id: int, admin_id: int):
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, "Authorized user could not be found!")
+        raise error.NotFoundError("admin", admin_id)
 
     found_event = db.get(dbmodels.Event, event_id)
 
     if found_event is None:
-        raise DatabaseError(404, "Event could not be found!")
+        raise error.NotFoundError("event", event_id)
 
     SKILLS_TOTAL_WEIGHT = 2
     LOCATION_TOTAL_WEIGHT = 4
@@ -192,7 +197,7 @@ def match_events_to_volunteer(
     found_volunteer = db.get(dbmodels.Volunteer, volunteer_id)
 
     if found_volunteer is None:
-        raise DatabaseError(404, "Volunteer could not be found!")
+        raise error.NotFoundError("volunteer", volunteer_id)
 
     SKILLS_TOTAL_WEIGHT = 2
     LOCATION_TOTAL_WEIGHT = 4

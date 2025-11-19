@@ -3,7 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels, pydanticmodels
-from ...util.error import DatabaseError
+from ...util import error
 
 
 # For error handling...
@@ -48,7 +48,7 @@ def create_volunteer(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("create_volunteer", str(exc))
     db.refresh(vol)
     del vol.password
     return vol
@@ -75,7 +75,7 @@ def create_org_admin(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("create_org_admin", str(exc))
     db.refresh(admin)
     del admin.password
     return admin
@@ -134,7 +134,7 @@ def create_new_org(
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+        raise error.NotFoundError("Admin", admin_id)
 
     new_org = dbmodels.Organization(
         name=org.name,
@@ -151,7 +151,7 @@ def create_new_org(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("create_org", str(exc))
     db.refresh(new_org)
     return new_org
 
@@ -161,15 +161,15 @@ def delete_org(db: Session, org_id: int, admin_id: int):
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+        raise error.NotFoundError("Admin", admin_id)
 
     found_org = db.get(dbmodels.Organization, org_id)
 
     if found_org is None:
-        raise DatabaseError(404, f"Organization with id {org_id} not found!")
+        raise error.NotFoundError("Organization", org_id)
 
     if found_admin.org_id != found_org.id:
-        raise DatabaseError(403, f"Authenticated admin not apart of org!")
+        raise error.AuthorizationError("Authenticated admin not apart of org!")
 
     db.delete(found_org)
 
@@ -177,7 +177,7 @@ def delete_org(db: Session, org_id: int, admin_id: int):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("delete_org", str(exc))
 
 
 def update_org_helper(
@@ -201,15 +201,15 @@ def update_org(
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+        raise error.NotFoundError("Admin", admin_id)
 
     found_org = db.get(dbmodels.Organization, org_id)
 
     if found_org is None:
-        raise DatabaseError(404, f"Organization with id {org_id} not found!")
+        raise error.NotFoundError("organization", org_id)
 
     if found_admin.org_id != found_org.id:
-        raise DatabaseError(403, "Authenticated admin not apart of org!")
+        raise error.AuthorizationError("Admin is not apart of organization!")
 
     updated_org: dbmodels.Organization = update_org_helper(found_org, org_updates)
 
@@ -217,7 +217,7 @@ def update_org(
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("update_org", str(exc))
     db.refresh(updated_org)
     return updated_org
 
@@ -234,10 +234,10 @@ def create_org_event(db: Session, event: pydanticmodels.EventCreate, admin_id: i
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+        raise error.NotFoundError("Admin", admin_id)
 
     if found_admin.org_id != event.org_id:
-        raise DatabaseError(403, "Authenticated admin not apart of organization!")
+        raise error.AuthorizationError("Admin is not apart of organization!")
 
     urgency = pydanticmodels.EventUrgency(
         getattr(event.urgency, "value", event.urgency)
@@ -262,7 +262,7 @@ def create_org_event(db: Session, event: pydanticmodels.EventCreate, admin_id: i
     organization = db.get(dbmodels.Organization, new_event.org_id)
 
     if organization is None:
-        raise DatabaseError(404, "Organization id tied to event not found!")
+        raise error.NotFoundError("organization", new_event.org_id)
 
     organization.events.append(new_event)
 
@@ -270,7 +270,7 @@ def create_org_event(db: Session, event: pydanticmodels.EventCreate, admin_id: i
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("create_org_event", str(exc))
     db.refresh(new_event)
     return new_event
 
@@ -318,26 +318,26 @@ def update_org_event(
     found_event = db.get(dbmodels.Event, event_id)
 
     if found_event is None:
-        raise DatabaseError(404, f"Event with id {event_id} not found!")
+        raise error.NotFoundError("event", event_id)
 
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+        raise error.NotFoundError("Admin", admin_id)
 
     if found_admin.org_id != found_event.org_id:
-        raise DatabaseError(403, "Authenticated admin not apart of organization!")
+        raise error.AuthorizationError("Admin is not apart of organization!")
 
     try:
         new_event = update_event_helper(found_event, event_updates)
     except ValueError as exc:
-        raise DatabaseError(400, f"Error updating database event! {exc}")
+        raise error.ValidationError("Invalid event data", fields={"capacity": str(exc)})
 
     try:
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("update_org_event", str(exc))
     db.refresh(new_event)
     return new_event
 
@@ -347,15 +347,15 @@ def delete_org_event(db: Session, event_id: int, admin_id: int):
     found_event = db.get(dbmodels.Event, event_id)
 
     if found_event is None:
-        raise DatabaseError(404, f"Event with id {event_id} not found!")
+        raise error.NotFoundError("event", event_id)
 
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
 
     if found_admin is None:
-        raise DatabaseError(404, f"Admin with id {admin_id} not found!")
+        raise error.NotFoundError("Admin", admin_id)
 
     if found_event.org_id != found_admin.org_id:
-        raise DatabaseError(403, "Authenticated admin not apart of organization!")
+        raise error.AuthorizationError("Admin is not apart of organization!")
 
     db.delete(found_event)
 
@@ -363,4 +363,4 @@ def delete_org_event(db: Session, event_id: int, admin_id: int):
         db.commit()
     except IntegrityError as exc:
         db.rollback()
-        raise DatabaseError(500, f"An error occured commiting to database! {exc}")
+        raise error.DatabaseOperationError("delete_org_event", str(exc))

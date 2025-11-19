@@ -145,3 +145,185 @@ async def logout(
 ### Dependencies
 - Can be implemented standalone as basic version
 - Full implementation depends on refresh token feature for "logout everywhere" functionality
+
+---
+
+## Enhanced Error Handling System
+
+### Overview
+Implement a comprehensive error handling system that clearly separates client-side errors (4xx) from server-side errors (5xx), provides descriptive messages to clients while protecting sensitive information, and maintains detailed logging for debugging.
+
+### Current State
+- Basic [`DatabaseError`](src/util/error.py) exception class for HTTP hints
+- Generic error handlers for HTTPException and RequestValidationError
+- Catch-all middleware logs errors but returns generic "Internal server error"
+- No distinction between client/server errors in logging
+- Limited error context for debugging
+
+### Problems to Solve
+1. **Information Leakage**: Stack traces and internal details can be exposed to clients
+2. **Poor Debugging**: Generic error messages make troubleshooting difficult
+3. **Inconsistent Responses**: Different error types return different response formats
+4. **No Error Tracking**: No correlation IDs or request tracing
+5. **Limited Context**: Errors don't capture enough information about request state
+
+### Proposed Changes
+
+#### 1. Enhanced Error Classes in `src/util/error.py`
+
+````python
+from typing import Any, Dict, Optional
+import uuid
+from datetime import datetime
+
+class BaseAPIError(Exception):
+    """Base class for all API errors with tracking"""
+    def __init__(
+        self,
+        status_code: int,
+        message: str,
+        detail: Optional[str] = None,
+        error_code: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ):
+        self.status_code = status_code
+        self.message = message  # Client-safe message
+        self.detail = detail    # Internal detail (not sent to client)
+        self.error_code = error_code
+        self.metadata = metadata or {}
+        self.error_id = str(uuid.uuid4())
+        self.timestamp = datetime.utcnow()
+        super().__init__(self.message)
+
+class ClientError(BaseAPIError):
+    """4xx errors - client mistakes"""
+    pass
+
+class ServerError(BaseAPIError):
+    """5xx errors - server issues"""
+    pass
+
+# Specific error types
+class ValidationError(ClientError):
+    def __init__(self, message: str, fields: Optional[Dict] = None):
+        super().__init__(
+            status_code=422,
+            message=message,
+            error_code="VALIDATION_ERROR",
+            metadata={"fields": fields} if fields else {}
+        )
+
+class AuthenticationError(ClientError):
+    def __init__(self, message: str = "Authentication failed"):
+        super().__init__(
+            status_code=401,
+            message=message,
+            error_code="AUTH_ERROR"
+        )
+
+class AuthorizationError(ClientError):
+    def __init__(self, message: str = "Insufficient permissions"):
+        super().__init__(
+            status_code=403,
+            message=message,
+            error_code="FORBIDDEN"
+        )
+
+class NotFoundError(ClientError):
+    def __init__(self, resource: str, identifier: Any):
+        super().__init__(
+            status_code=404,
+            message=f"{resource} not found",
+            error_code="NOT_FOUND",
+            metadata={"resource": resource, "id": str(identifier)}
+        )
+
+class ConflictError(ClientError):
+    def __init__(self, message: str):
+        super().__init__(
+            status_code=409,
+            message=message,
+            error_code="CONFLICT"
+        )
+
+class DatabaseOperationError(ServerError):
+    def __init__(self, operation: str, detail: str):
+        super().__init__(
+            status_code=500,
+            message="Database operation failed",
+            detail=f"Operation '{operation}' failed: {detail}",
+            error_code="DB_ERROR",
+            metadata={"operation": operation}
+        )
+
+class ExternalServiceError(ServerError):
+    def __init__(self, service: str, detail: str):
+        super().__init__(
+            status_code=503,
+            message="External service unavailable",
+            detail=f"Service '{service}' error: {detail}",
+            error_code="SERVICE_ERROR",
+            metadata={"service": service}
+        )
+`````
+
+#### 2. New Middleware for Error Handling
+Add middleware to catch exceptions and convert to API errors:
+```python
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+
+class ErrorHandlingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        try:
+            response: Response = await call_next(request)
+            return response
+        except BaseAPIError as api_error:
+            # Handle known API errors
+            return JSONResponse(
+                status_code=api_error.status_code,
+                content={
+                    "error": {
+                        "code": api_error.error_code,
+                        "message": api_error.message,
+                        "details": api_error.detail,
+                        "request_id": api_error.error_id
+                    }
+                }
+            )
+        except Exception as ex:
+            # Handle unexpected errors
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": {
+                        "code": "INTERNAL_SERVER_ERROR",
+                        "message": "An unexpected error occurred",
+                        "request_id": str(uuid.uuid4())
+                    }
+                }
+            )
+```
+
+#### 3. Logging Enhancements
+- Log error details at appropriate levels (e.g., `error`, `warning`, `info`)
+- Include request context in logs (e.g., request ID, user ID)
+- Optionally integrate with external logging/monitoring services (e.g., Sentry, Loggly)
+
+### Estimated Effort
+1-2 days including:
+- Error class implementation
+- Middleware development
+- Logging configuration
+- Testing error scenarios
+- Documentation
+
+### Security Considerations
+- Ensure no sensitive information is leaked in error responses
+- Rate limit error-prone endpoints to prevent abuse
+- Monitor logs for unusual error patterns (e.g., spikes in 5xx errors)
+
+### Related Files
+- `src/util/error.py` - Error class definitions
+- `src/middleware/error_handling.py` - Error handling middleware
+- `src/tests/unit/test_error_handling.py` - Unit tests for error handling
