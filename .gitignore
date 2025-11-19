@@ -1,4 +1,4 @@
-venv
+venv/
 .venv
 __pycache__
 *.pyc
@@ -28,3 +28,4 @@ test-results/
 .github/
 .pytest_cache/
 .coverage
+cookies.txt
