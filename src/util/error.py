@@ -136,7 +136,7 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                     }
                 },
             )
-        except Exception as ex:
+        except Exception:
             # Log unexpected errors with full traceback
             error_id = str(uuid.uuid4())
             logger = logging.getLogger(__name__)
@@ -156,62 +156,34 @@ class ErrorHandlingMiddleware(BaseHTTPMiddleware):
                         "id": error_id,
                         "code": "INTERNAL_SERVER_ERROR",
                         "message": "An unexpected error occurred",
-                        "timestamp": datetime.utcnow().isoformat(),
+                        "timestamp": datetime.now().isoformat(),
                         "path": request.url.path,
                     }
                 },
             )
 
 
-# Exception class for database files
-# Provides hints for HTTPException class
-class DatabaseError(Exception):
-    """
-    Custom class for database exceptions for HTTP Exception
-    """
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
 
-    def __init__(self, status_code: int, detail: str):
-        self.status_code = status_code
-        self.detail = detail
-        super().__init__(self.detail)
+    # Create readable error message
+    field_errors = {}
+    for err in errors:
+        field = err["loc"][-1]  # Get the field name
+        field_errors[field] = err["msg"]
 
-
-# Error handlers for FastAPI
-# Will handle HTTP Exceptions and validation exceptions
-# If other exception occurs, it logs it and returns a 500 error
-
-
-async def http_exception_handler(request: Request, exception: HTTPException):
-    return JSONResponse(
-        status_code=exception.status_code,
-        content={"status_code": exception.status_code, "message": exception.detail},
-    )
-
-
-async def validation_exception_error(
-    request: Request, exception: RequestValidationError
-):
-
-    exception_object = exception.errors()
-
-    exception_strings: list[str] = []
-
-    for string in exception_object:
-        result = f"Validation Error in location '{string['loc']}'. {string['msg']}"
-        exception_strings.append(result)
+    validation_error = ValidationError("Request validation failed", field_errors)
 
     return JSONResponse(
-        status_code=422, content={"status_code": 422, "message": exception_strings}
+        status_code=422,
+        content={
+            "error": {
+                "id": str(validation_error.error_id),
+                "code": validation_error.error_code,
+                "message": validation_error.message,
+                "timestamp": validation_error.timestamp.isoformat(),
+                "path": str(request.url.path),
+                "details": validation_error.metadata,
+            }
+        },
     )
-
-
-async def catch_all_exceptions_middleware(request: Request, call_next):
-    try:
-        return await call_next(request)
-    except Exception as e:
-        logging.basicConfig(filename="errors.log", level=logging.INFO)
-        logging.info(f"Error happened! {e}")
-        print(e)
-        return JSONResponse(
-            status_code=500, content={"message": "Internal server error."}
-        )
