@@ -4,12 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from ..dependencies.database.config import get_db
-from ..dependencies.auth import get_current_user, is_admin, UserTokenInfo
+from ..dependencies.auth import get_current_user, is_volunteer, UserTokenInfo
 from ..dependencies.database.relations import (
     match_events_to_volunteer,
     get_volunteer_history,
 )
-from ..models import dbmodels
+from ..util import error
 
 router = APIRouter(prefix="/vol", tags=["volunteer"])
 
@@ -28,11 +28,8 @@ def volunteer_event_matches(
     - Admin may view any volunteer's matches.
     """
     # authorize
-    same_user = user.user_id == volunteer_id
-    if not (is_admin(user) or same_user):
-        raise HTTPException(
-            status_code=403, detail="Not authorized to view these recommendations"
-        )
+    if user.user_id != volunteer_id or not is_volunteer(user):
+        raise error.AuthorizationError("Current user does not have same id as request")
 
     # compute matches
     scored = match_events_to_volunteer(db, volunteer_id)

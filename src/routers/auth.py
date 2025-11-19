@@ -2,7 +2,6 @@ from fastapi import (
     APIRouter,
     Response,
     Depends,
-    HTTPException,
     status,
     File,
     Form,
@@ -32,6 +31,7 @@ from ..dependencies.database.crud import (
     get_current_admin,
 )
 from ..dependencies.aws import get_s3, upload_image
+from ..util import error
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -73,10 +73,10 @@ async def volunteer_login(
     found_volunteer = get_volunteer_login(db, login_data.email)
 
     if found_volunteer is None:
-        raise HTTPException(401, "User email or password incorrect!")
+        raise error.AuthenticationError("User or password incorrect")
 
     if not verify_password(login_data.password, found_volunteer.password):
-        raise HTTPException(401, "User or password incorrect!")
+        raise error.AuthenticationError("User or password incorrect")
 
     del found_volunteer.password
 
@@ -110,11 +110,12 @@ async def admin_login(
 ):
     found_admin = get_admin_login(db, login_data.email)
 
+    # Let's just throw the same error so it's harder to hack the system
     if found_admin is None:
-        raise HTTPException(401, "User or password incorrect!")
+        raise error.AuthenticationError("User or password incorrect")
 
     if not verify_password(login_data.password, found_admin.password):
-        raise HTTPException(401, "User or password incorrect!")
+        raise error.AuthenticationError("User or password incorrect")
 
     # Delete password so it isn't passed along
     del found_admin.password
@@ -129,12 +130,12 @@ async def get_volunteer(
     user_info: UserTokenInfo = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     if not is_volunteer(user_info):
-        raise HTTPException(403, detail="User is not a volunteer!")
+        raise error.AuthorizationError("User is not an volunteer")
 
     found_volunteer = get_current_volunteer(db, user_info.user_id)
 
     if found_volunteer is None:
-        raise HTTPException(status_code=404, detail="Volunteer not found!")
+        raise error.NotFoundError("volunteer", user_info.user_id)
 
     return found_volunteer
 
@@ -144,12 +145,12 @@ async def get_admin(
     user_info: UserTokenInfo = Depends(get_current_user), db: Session = Depends(get_db)
 ):
     if not is_admin(user_info):
-        raise HTTPException(403, detail="User is not an admin!")
+        raise error.AuthorizationError("User is not an admin")
 
     found_admin = get_current_admin(db, user_info.user_id)
 
     if found_admin is None:
-        raise HTTPException(status_code=404, detail="Organization admin not found!")
+        raise error.NotFoundError("admin", user_info.user_id)
 
     return found_admin
 
@@ -158,17 +159,12 @@ async def get_admin(
 async def get_user(
     user_info: UserTokenInfo = Depends(get_current_user), db: Session = Depends(get_db)
 ):
-    try:
-        if is_volunteer(user_info):
-            return await get_volunteer(user_info, db)
-        elif is_admin(user_info):
-            return await get_admin(user_info, db)
-        else:
-            raise HTTPException(403, "User type not recognized!")
-    except HTTPException as exc:
-        raise HTTPException(
-            exc.status_code, f"Could not retrieve user info! {exc.detail}"
-        )
+    if is_volunteer(user_info):
+        return await get_volunteer(user_info, db)
+    elif is_admin(user_info):
+        return await get_admin(user_info, db)
+    else:
+        raise error.AuthorizationError("Type of user not recognized")
 
 
 @router.post("/logout")

@@ -11,6 +11,7 @@ from ..dependencies.database.crud import (
     delete_org,
     update_org,
 )
+from ..util import error
 
 router = APIRouter(prefix="/org", tags=["org"])
 
@@ -21,7 +22,7 @@ async def get_org_details(org_id: int, db: Session = Depends(get_db)):
     org = get_org_from_id(db, org_id)
 
     if org is None:
-        raise HTTPException(404, f"Organization with id {org_id} not found!")
+        raise error.NotFoundError("organization", org_id)
 
     return org
 
@@ -36,26 +37,20 @@ async def create_org(
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
-    try:
-        org = OrgCreate.model_validate_json(org_str)
+    org = OrgCreate.model_validate_json(org_str)
 
-        image_url: str | None = None
-        if image is not None:
-            image_url = upload_image(s3, image)
+    image_url: str | None = None
+    if image is not None:
+        image_url = upload_image(s3, image)
 
-        if not is_admin(user_info):
-            raise HTTPException(403, "User is not an admin")
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
 
-        admin_id = user_info.user_id
+    admin_id = user_info.user_id
 
-        new_org = create_new_org(db, org, admin_id, image_url)
+    new_org = create_new_org(db, org, admin_id, image_url)
 
-        return new_org
-
-    except HTTPException as exc:
-        raise HTTPException(
-            exc.status_code, detail=f"Event could not be created. {exc.detail}"
-        )
+    return new_org
 
 
 @router.patch("/{org_id}")
@@ -65,20 +60,14 @@ async def update_org_from_id(
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    try:
-        if not is_admin(user_info):
-            raise HTTPException(403, "User is not an admin")
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
 
-        admin_id = user_info.user_id
+    admin_id = user_info.user_id
 
-        updated_org = update_org(db, org_id, org_updates, admin_id)
+    updated_org = update_org(db, org_id, org_updates, admin_id)
 
-        return updated_org
-
-    except HTTPException as exc:
-        raise HTTPException(
-            exc.status_code, detail=f"Event could not be updated. {exc.detail}"
-        )
+    return updated_org
 
 
 @router.delete("/{org_id}")
@@ -87,17 +76,11 @@ async def delete_org_from_id(
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    try:
-        if not is_admin(user_info):
-            raise HTTPException(403, "User is not an admin")
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
 
-        admin_id = user_info.user_id
+    admin_id = user_info.user_id
 
-        delete_org(db, org_id, admin_id)
+    delete_org(db, org_id, admin_id)
 
-        return {"message": f"Event successfully deleted!"}
-
-    except HTTPException as exc:
-        raise HTTPException(
-            exc.status_code, detail=f"Event could not be deleted. {exc.detail}"
-        )
+    return {"message": f"Event successfully deleted!"}

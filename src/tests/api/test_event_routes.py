@@ -7,7 +7,7 @@ from src.tests.database.conftest import Factories  # from tests/database/conftes
 from src.dependencies.database import relations
 
 
-def test_get_event(client: TestClient, db_session: Session, factories: Factories):
+def test_get_event(client: TestClient, factories: Factories):
     NAME = "EVENT"
     org = factories.organization()
     ev = factories.event(org=org, name=NAME)
