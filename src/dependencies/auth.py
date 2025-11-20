@@ -55,7 +55,7 @@ def sign_JWT_admin(userId: int, response: Response):
         httponly=True,
         max_age=3600,
         path="/",
-        samesite="lax",
+        samesite="none",
         secure=staging,
     )
     return response
@@ -63,10 +63,11 @@ def sign_JWT_admin(userId: int, response: Response):
 
 def sign_JWT_volunteer(userId: int, response: Response):
     payload = {"userId": userId, "exp": time.time() + 3600, "userType": "volunteer"}
-    if JWT_SECRET is None:
+    if JWT_SECRET is None or STAGING is None:
         raise error.ExternalServiceError(
             "Auth", "Environment credentials are not loaded"
         )
+    staging = STAGING == "true"
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie(
         "access_token",
@@ -74,8 +75,8 @@ def sign_JWT_volunteer(userId: int, response: Response):
         httponly=True,
         max_age=3600,
         path="/",
-        samesite="lax",
-        secure=True,
+        samesite="none",
+        secure=staging,
     )
     return response
 
