@@ -22,6 +22,7 @@ from ..util import error
 
 
 JWT_SECRET = os.environ.get("JWT_SECRET")
+STAGING = os.environ.get("STAGING")
 ALGORITHMS = ["HS256"]
 SALT_ROUNDS = 12
 
@@ -40,11 +41,13 @@ def verify_password(plaintext_pw: str, hashed_pw: str) -> bool:
 
 # Signs the JWT string
 def sign_JWT_admin(userId: int, response: Response):
+
     payload = {"userId": userId, "exp": time.time() + 3600, "userType": "admin"}
-    if JWT_SECRET is None:
+    if JWT_SECRET is None or STAGING is None:
         raise error.ExternalServiceError(
             "Auth", "Environment credentials are not loaded"
         )
+    staging = STAGING == "true"
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
     response.set_cookie(
         "access_token",
@@ -53,7 +56,7 @@ def sign_JWT_admin(userId: int, response: Response):
         max_age=3600,
         path="/",
         samesite="none",
-        secure=False,
+        secure=staging,
     )
     return response
 
@@ -71,8 +74,8 @@ def sign_JWT_volunteer(userId: int, response: Response):
         httponly=True,
         max_age=3600,
         path="/",
-        samesite="lax",
-        secure=False,
+        samesite="none",
+        secure=True,
     )
     return response
 
