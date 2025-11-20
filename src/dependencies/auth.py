@@ -98,7 +98,7 @@ def decodeJWT(token: str):
 
 
 class JWTBearer(HTTPBearer):
-    def __init__(self, auto_Error: bool = True):
+    def __init__(self, auto_Error: bool = False):
         super(JWTBearer, self).__init__(auto_error=auto_Error)
 
     async def __call__(self, request: Request) -> str | None:
