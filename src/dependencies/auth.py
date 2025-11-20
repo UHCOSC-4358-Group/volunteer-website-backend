@@ -55,7 +55,7 @@ def sign_JWT_admin(userId: int, response: Response):
         httponly=True,
         max_age=3600,
         path="/",
-        samesite="none",
+        samesite="lax",
         secure=staging,
     )
     return response
@@ -74,7 +74,7 @@ def sign_JWT_volunteer(userId: int, response: Response):
         httponly=True,
         max_age=3600,
         path="/",
-        samesite="none",
+        samesite="lax",
         secure=True,
     )
     return response
