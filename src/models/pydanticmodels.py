@@ -81,11 +81,16 @@ class EventUpdate(BaseModel):
     end_time: time | None = None
 
 
+class OrgCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(min_length=10, max_length=800)
+    location: str = Field(min_length=1, max_length=255)
+
+
 class OrgUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, min_length=10, max_length=800)
-    location: LocationUpdate | None = None  # Changed from str
-    image_url: str | None = Field(None, min_length=1, max_length=255)
+    location: LocationUpdate | None = None
 
 
 class Notification(BaseModel):
