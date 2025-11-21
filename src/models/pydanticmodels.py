@@ -2,6 +2,45 @@ from pydantic import BaseModel, Field, field_validator, model_validator, EmailSt
 from enum import Enum
 from datetime import datetime, time, date
 
+# === Location Models ===
+
+
+class LocationBase(BaseModel):
+    """Base location model with all address components."""
+
+    address: str = Field(min_length=1, max_length=255)
+    city: str = Field(min_length=1, max_length=100)
+    state: str = Field(min_length=2, max_length=50)
+    zip_code: str = Field(min_length=5, max_length=20)
+    country: str = Field(default="USA", max_length=100)
+
+
+class LocationCreate(LocationBase):
+    """Model for creating a new location. Coordinates will be added via geocoding."""
+
+    pass
+
+
+class LocationUpdate(BaseModel):
+    """Model for updating location fields. All fields optional."""
+
+    address: str | None = Field(None, min_length=1, max_length=255)
+    city: str | None = Field(None, min_length=1, max_length=100)
+    state: str | None = Field(None, min_length=2, max_length=50)
+    zip_code: str | None = Field(None, min_length=5, max_length=20)
+    country: str | None = Field(None, max_length=100)
+
+
+class LocationResponse(LocationBase):
+    """Complete location data including geocoded coordinates."""
+
+    id: int
+    latitude: float | None = None
+    longitude: float | None = None
+    geocoded_at: datetime | None = None
+
+    model_config = {"from_attributes": True}
+
 
 class EventUrgency(str, Enum):
     LOW = "Low"
@@ -27,26 +66,26 @@ class DayOfWeek(int, Enum):
     SUNDAY = 7
 
 
+# === Update Models ===
+
+
 class EventUpdate(BaseModel):
-    name: str | None
-    description: str | None
-    location: str | None
-    required_skills: list[str] | None
-    urgency: EventUrgency | None
-    capacity: int | None
-
-
-class OrgCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    description: str = Field(min_length=10, max_length=800)
-    location: str = Field(min_length=1, max_length=255)
+    name: str | None = None
+    description: str | None = None
+    location: LocationUpdate | None = None  # Changed from str
+    needed_skills: list[str] | None = None
+    urgency: EventUrgency | None = None
+    capacity: int | None = None
+    day: date | None = None
+    start_time: time | None = None
+    end_time: time | None = None
 
 
 class OrgUpdate(BaseModel):
-    name: str | None = Field(min_length=1, max_length=100)
-    description: str | None = Field(min_length=10, max_length=800)
-    location: str | None = Field(min_length=1, max_length=255)
-    image_url: str | None = Field(min_length=1, max_length=255)
+    name: str | None = Field(None, min_length=1, max_length=100)
+    description: str | None = Field(None, min_length=10, max_length=800)
+    location: LocationUpdate | None = None  # Changed from str
+    image_url: str | None = Field(None, min_length=1, max_length=255)
 
 
 class Notification(BaseModel):
@@ -60,7 +99,7 @@ class Notification(BaseModel):
 class EventCreate(BaseModel):
     name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
-    location: str
+    location: LocationCreate  # More explicit naming
     needed_skills: list[str]
     urgency: EventUrgency
     capacity: int
@@ -133,7 +172,7 @@ class VolunteerCreate(BaseModel):
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
     date_of_birth: date
-    location: str
+    location: LocationCreate | None = None
     skills: list[str]
     available_times: list[AvailableTime] = Field(
         description="Weekly availability slots",
