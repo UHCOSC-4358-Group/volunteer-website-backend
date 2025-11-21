@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Integer,
+    Float,
     String,
     Enum as SAEnum,
     ForeignKey,
@@ -7,12 +8,56 @@ from sqlalchemy import (
     Text,
     Time,
     Date,
+    DateTime,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
-from typing import List
+from typing import List, Optional
 from .pydanticmodels import EventUrgency, DayOfWeek
+from datetime import datetime, timezone
 
 Base = declarative_base()
+
+
+class Location(Base):
+    __tablename__ = "location"
+    __table_args__ = (
+        UniqueConstraint(
+            "address", "city", "state", "zip_code", name="uq_location_full_address"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    address: Mapped[str] = mapped_column(String(255), nullable=False)
+    city: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    state: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    zip_code: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    country: Mapped[str] = mapped_column(
+        String(100), default="USA", server_default="USA", nullable=False
+    )
+    latitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    longitude: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    geocoded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        server_default="NOW()",
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        onupdate=datetime.now(timezone.utc),
+        server_default="NOW()",
+        nullable=False,
+    )
+
+    # Relationships
+    volunteers: Mapped[List["Volunteer"]] = relationship(back_populates="location")
+    events: Mapped[List["Event"]] = relationship(back_populates="location")
+    organizations: Mapped[List["Organization"]] = relationship(
+        back_populates="location"
+    )
 
 
 class Volunteer(Base):
@@ -30,11 +75,19 @@ class Volunteer(Base):
     last_name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str] = mapped_column(Text)
     image_url: Mapped[str] = mapped_column(String(512), nullable=True)
-    location: Mapped[str] = mapped_column(String(255))
     user_type: Mapped[str] = mapped_column(
         String(9), default="volunteer", server_default="volunteer"
     )
     date_of_birth: Mapped[Date] = mapped_column(Date)
+
+    location_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("location.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Many-to-one: Volunteer -> Location
+    location: Mapped[Optional["Location"]] = relationship(back_populates="volunteers")
 
     # One-to-many: Volunteer -> VolunteerSkill
     skills: Mapped[List["VolunteerSkill"]] = relationship(
@@ -94,11 +147,21 @@ class VolunteerAvailableTime(Base):
 
 class Organization(Base):
     __tablename__ = "organization"
+
     id: Mapped[int] = mapped_column(Integer, primary_key=True, nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    location: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text)
     image_url: Mapped[str] = mapped_column(String(512), nullable=True)
+
+    # Foreign key to Location (RESTRICT on delete - cannot delete location if org uses it)
+    location_id: Mapped[int] = mapped_column(
+        ForeignKey("location.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    # Many-to-one: Organization -> Location
+    location: Mapped["Location"] = relationship(back_populates="organizations")
 
     # One-to-many: Organization -> OrgAdmin (SET NULL on org delete)
     admins: Mapped[List["OrgAdmin"]] = relationship(
@@ -153,7 +216,6 @@ class Event(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    location: Mapped[str] = mapped_column(String(255), nullable=False)
     day: Mapped[Date] = mapped_column(Date)
     start_time: Mapped[Time] = mapped_column(Time)
     end_time: Mapped[Time] = mapped_column(Time)
@@ -167,12 +229,22 @@ class Event(Base):
     )
     capacity: Mapped[int] = mapped_column(Integer, nullable=False)
 
+    # Foreign key to Location (RESTRICT on delete - cannot delete location if event uses it)
+    location_id: Mapped[int] = mapped_column(
+        ForeignKey("location.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
     # If org is deleted, then all events are deleted
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organization.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
     )
+
+    # Many-to-one: Event -> Location
+    location: Mapped["Location"] = relationship(back_populates="events")
 
     # Many-to-one: Event -> Organization
     organization: Mapped["Organization"] = relationship(back_populates="events")
