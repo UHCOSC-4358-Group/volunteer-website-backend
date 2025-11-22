@@ -4,7 +4,7 @@ from fastapi import (
     Depends,
     status,
     File,
-    Form,
+    Body,
     UploadFile,
 )
 from pydantic import BaseModel, EmailStr
@@ -31,6 +31,7 @@ from ..dependencies.database.crud import (
     get_current_admin,
 )
 from ..dependencies.aws import get_s3, upload_image
+from ..dependencies.geocoding import get_coordinates
 from ..util import error
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -39,14 +40,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/vol/signup", status_code=status.HTTP_201_CREATED)
 async def volunteer_signup(
     response: Response,
-    vol_str: str = Form(json_schema_extra=VolunteerCreate.model_json_schema()),
+    vol: VolunteerCreate = Body(...),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
+    latlong: tuple[float, float] | None = None
 
-    # If user uploaded an image, then upload image to aws and return the url
-    vol = VolunteerCreate.model_validate_json(vol_str)
+    if vol.location is not None:
+        latlong = get_coordinates(vol.location)
 
     image_url: str | None = None
     if image is not None:
@@ -54,7 +56,7 @@ async def volunteer_signup(
 
     vol.password = hash_password(vol.password)
 
-    volunteer_obj = create_volunteer(db, vol, image_url)
+    volunteer_obj = create_volunteer(db, vol, image_url, latlong)
 
     sign_JWT_volunteer(volunteer_obj.id, response)
 
@@ -88,12 +90,11 @@ async def volunteer_login(
 @router.post("/org/signup", status_code=status.HTTP_201_CREATED)
 async def admin_signup(
     response: Response,
-    admin_str: str = Form(json_schema_extra=AdminCreate.model_json_schema()),
+    admin: AdminCreate = Body(...),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
-    admin = AdminCreate.model_validate_json(admin_str)
     image_url: str | None = None
     if image is not None:
         image_url = upload_image(s3, image)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, status, UploadFile, File, Body
 from sqlalchemy.orm import Session
 from mypy_boto3_s3 import S3Client
 from ..models.pydanticmodels import OrgCreate, OrgUpdate
@@ -11,6 +11,7 @@ from ..dependencies.database.crud import (
     delete_org,
     update_org,
 )
+from ..dependencies.geocoding import get_coordinates
 from ..util import error
 
 router = APIRouter(prefix="/org", tags=["org"])
@@ -31,24 +32,27 @@ async def get_org_details(org_id: int, db: Session = Depends(get_db)):
 # Also, must attach org admin id to user
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_org(
-    org_str: str = Form(json_schema_extra=OrgCreate.model_json_schema()),
+    org: OrgCreate = Body(...),
     image: UploadFile = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
-    org = OrgCreate.model_validate_json(org_str)
-
-    image_url: str | None = None
-    if image is not None:
-        image_url = upload_image(s3, image)
 
     if not is_admin(user_info):
         raise error.AuthorizationError("User is not an admin")
 
     admin_id = user_info.user_id
 
-    new_org = create_new_org(db, org, admin_id, image_url)
+    image_url: str | None = None
+    if image is not None:
+        image_url = upload_image(s3, image)
+
+    latlong: tuple[float, float] | None = None
+    if org.location is not None:
+        latlong = get_coordinates(org.location)
+
+    new_org = create_new_org(db, org, admin_id, image_url, latlong)
 
     return new_org
 
@@ -57,15 +61,26 @@ async def create_org(
 async def update_org_from_id(
     org_id: int,
     org_updates: OrgUpdate,
+    image: UploadFile | None = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
+    s3: S3Client = Depends(get_s3),
 ):
     if not is_admin(user_info):
         raise error.AuthorizationError("User is not an admin")
 
     admin_id = user_info.user_id
 
-    updated_org = update_org(db, org_id, org_updates, admin_id)
+    image_url: str | None = None
+    if image:
+        image_url = upload_image(s3, image)
+
+    latlong: tuple[float, float] | None = None
+
+    if org_updates.location is not None:
+        latlong = get_coordinates(org_updates.location)
+
+    updated_org = update_org(db, org_id, org_updates, admin_id, image_url, latlong)
 
     return updated_org
 

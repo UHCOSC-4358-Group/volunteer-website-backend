@@ -1,5 +1,6 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Body, File, UploadFile
 from sqlalchemy.orm import Session
+from mypy_boto3_s3 import S3Client
 from ..models import dbmodels
 from ..models.pydanticmodels import EventCreate, EventUpdate
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin, is_volunteer
@@ -15,6 +16,8 @@ from ..dependencies.database.relations import (
     remove_volunteer_event,
     match_volunteers_to_event,
 )
+from ..dependencies.aws import upload_image, get_s3
+from ..dependencies.geocoding import get_coordinates
 from ..util import error
 
 router = APIRouter(prefix="/events", tags=["event"])
@@ -34,9 +37,11 @@ async def get_event(event_id: int, db: Session = Depends(get_db)):
 # CRITERIA: MUST BE AUTHED, AND MUST BE AN ADMIN
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_event(
-    event: EventCreate,
+    event: EventCreate = Body(...),
+    image: UploadFile | None = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
+    s3: S3Client = Depends(get_s3),
 ):
     # User_id must be an admin, and must be in that org
     if not is_admin(user_info):
@@ -44,7 +49,15 @@ async def create_event(
 
     admin_id = user_info.user_id
 
-    new_event = create_org_event(db, event, admin_id)
+    latlong: tuple[float, float] | None = None
+    if event.location is not None:
+        latlong = get_coordinates(event.location)
+
+    image_url: str | None = None
+    if image is not None:
+        image_url = upload_image(s3, image)
+
+    new_event = create_org_event(db, event, admin_id, image_url, latlong)
 
     return new_event
 
@@ -53,16 +66,28 @@ async def create_event(
 @router.patch("/{event_id}")
 async def update_event(
     event_id: int,
-    event_updates: EventUpdate,
+    event_updates: EventUpdate = Body(...),
+    image: UploadFile | None = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
+    s3: S3Client = Depends(get_s3),
 ):
     if not is_admin(user_info):
         raise error.AuthorizationError("User is not an admin")
 
     admin_id = user_info.user_id
 
-    updated_event = update_org_event(db, event_id, event_updates, admin_id)
+    latlong: tuple[float, float] | None = None
+    if event_updates.location is not None:
+        latlong = get_coordinates(event_updates.location)
+
+    image_url: str | None = None
+    if image is not None:
+        image_url = upload_image(s3, image)
+
+    updated_event = update_org_event(
+        db, event_id, event_updates, admin_id, image_url, latlong
+    )
 
     return updated_event
 

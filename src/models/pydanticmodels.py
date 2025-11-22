@@ -5,41 +5,14 @@ from datetime import datetime, time, date
 # === Location Models ===
 
 
-class LocationBase(BaseModel):
+class Location(BaseModel):
     """Base location model with all address components."""
 
     address: str = Field(min_length=1, max_length=255)
     city: str = Field(min_length=1, max_length=100)
     state: str = Field(min_length=2, max_length=50)
     zip_code: str = Field(min_length=5, max_length=20)
-    country: str = Field(default="USA", max_length=100)
-
-
-class LocationCreate(LocationBase):
-    """Model for creating a new location. Coordinates will be added via geocoding."""
-
-    pass
-
-
-class LocationUpdate(BaseModel):
-    """Model for updating location fields. All fields optional."""
-
-    address: str | None = Field(None, min_length=1, max_length=255)
-    city: str | None = Field(None, min_length=1, max_length=100)
-    state: str | None = Field(None, min_length=2, max_length=50)
-    zip_code: str | None = Field(None, min_length=5, max_length=20)
-    country: str | None = Field(None, max_length=100)
-
-
-class LocationResponse(LocationBase):
-    """Complete location data including geocoded coordinates."""
-
-    id: int
-    latitude: float | None = None
-    longitude: float | None = None
-    geocoded_at: datetime | None = None
-
-    model_config = {"from_attributes": True}
+    country: str = Field(min_length=2, max_length=100)
 
 
 class EventUrgency(str, Enum):
@@ -72,7 +45,7 @@ class DayOfWeek(int, Enum):
 class EventUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
-    location: LocationUpdate | None = None  # Changed from str
+    location: Location | None = None  # Changed from str
     needed_skills: list[str] | None = None
     urgency: EventUrgency | None = None
     capacity: int | None = None
@@ -84,13 +57,13 @@ class EventUpdate(BaseModel):
 class OrgCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(min_length=10, max_length=800)
-    location: str = Field(min_length=1, max_length=255)
+    location: Location | None = None
 
 
 class OrgUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=100)
     description: str | None = Field(None, min_length=10, max_length=800)
-    location: LocationUpdate | None = None
+    location: Location | None = None
 
 
 class Notification(BaseModel):
@@ -104,7 +77,7 @@ class Notification(BaseModel):
 class EventCreate(BaseModel):
     name: str = Field(min_length=5, max_length=100)
     description: str = Field(min_length=10, max_length=800)
-    location: LocationCreate  # More explicit naming
+    location: Location | None = None
     needed_skills: list[str]
     urgency: EventUrgency
     capacity: int
@@ -177,7 +150,7 @@ class VolunteerCreate(BaseModel):
     last_name: str = Field(min_length=1, max_length=40)
     description: str = Field(min_length=10, max_length=800)
     date_of_birth: date
-    location: LocationCreate | None = None
+    location: Location | None = None
     skills: list[str]
     available_times: list[AvailableTime] = Field(
         description="Weekly availability slots",

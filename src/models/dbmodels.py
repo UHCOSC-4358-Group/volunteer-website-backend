@@ -9,7 +9,6 @@ from sqlalchemy import (
     Time,
     Date,
     DateTime,
-    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import List, Optional
@@ -21,11 +20,6 @@ Base = declarative_base()
 
 class Location(Base):
     __tablename__ = "location"
-    __table_args__ = (
-        UniqueConstraint(
-            "address", "city", "state", "zip_code", name="uq_location_full_address"
-        ),
-    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     address: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -37,7 +31,6 @@ class Location(Base):
     )
     latitude: Mapped[float] = mapped_column(Float, nullable=True)
     longitude: Mapped[float] = mapped_column(Float, nullable=True)
-    geocoded_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.now(timezone.utc),
@@ -52,7 +45,7 @@ class Location(Base):
         nullable=False,
     )
 
-    # Relationships
+    # Relationships remain the same
     volunteers: Mapped[List["Volunteer"]] = relationship(back_populates="location")
     events: Mapped[List["Event"]] = relationship(back_populates="location")
     organizations: Mapped[List["Organization"]] = relationship(
@@ -216,6 +209,7 @@ class Event(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    image_url: Mapped[str] = mapped_column(String(255), nullable=True)
     day: Mapped[Date] = mapped_column(Date)
     start_time: Mapped[Time] = mapped_column(Time)
     end_time: Mapped[Time] = mapped_column(Time)

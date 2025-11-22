@@ -1,12 +1,13 @@
 from requests import get, exceptions
 from urllib.parse import quote
+from ..models.pydanticmodels import Location
 import os
 from ..util import error
 
 GOOGLE_GEOCODING_API_KEY = os.environ.get("GOOGLE_GEOCODING_API_KEY")
 
 
-def geocode_address(address: str) -> tuple[float, float, str]:
+def geocode_address(address: str) -> tuple[float, float]:
 
     if GOOGLE_GEOCODING_API_KEY is None:
         raise error.ExternalServiceError(
@@ -42,7 +43,7 @@ def geocode_address(address: str) -> tuple[float, float, str]:
         error_message = content["error_message"]
         if error_message:
             raise error.ExternalServiceError(
-                "Geocoding", f"Returned status: {status}, Message : ${error_message}"
+                "Geocoding", f"Returned status: {status}, Message : {error_message}"
             )
         else:
             raise error.ExternalServiceError("Geocoding", f"Returned status: {status}")
@@ -56,6 +57,14 @@ def geocode_address(address: str) -> tuple[float, float, str]:
 
     latitude: float = result["geometry"]["location"]["lat"]
     longitude: float = result["geometry"]["location"]["lng"]
-    formatted_address = result["formatted_address"]
 
-    return latitude, longitude, formatted_address
+    return latitude, longitude
+
+
+def get_coordinates(location: Location):
+
+    full_address = f"{location.address}, {location.city}, {location.state}, {location.country} {location.zip_code}"
+
+    latitude, longitude = geocode_address(full_address)
+
+    return (latitude, longitude)
