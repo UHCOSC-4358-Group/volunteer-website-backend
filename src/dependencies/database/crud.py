@@ -72,7 +72,6 @@ def create_volunteer(
         last_name=new_volunteer.last_name,
         description=new_volunteer.description,
         image_url=image_url,
-        location=new_volunteer.location,
         date_of_birth=new_volunteer.date_of_birth,
     )
 
@@ -321,7 +320,6 @@ def create_org_event(
         name=event.name,
         description=event.description,
         image_url=image_url,
-        location=event.location,
         urgency=urgency,
         capacity=event.capacity,
         org_id=event.org_id,

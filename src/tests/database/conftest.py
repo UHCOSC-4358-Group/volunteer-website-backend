@@ -1,11 +1,11 @@
 import itertools
 import pytest
-from datetime import date, time
+from datetime import date, datetime, time
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from typing import Any, Protocol
-from src.models import dbmodels, pydanticmodels
+from src.models import dbmodels
 
 
 class Factories(Protocol):
@@ -71,7 +71,7 @@ def factories(db_session: Session) -> Factories:
             "last_name": f"Last{n}",
             "description": "",
             "image_url": "",
-            "location": "Houston",
+            "location_id": None,
             "date_of_birth": date(2002, 11, 11),
         }
 
@@ -89,7 +89,7 @@ def factories(db_session: Session) -> Factories:
     def _organization_defaults(n: int) -> dict[str, Any]:
         return {
             "name": f"Org {n}",
-            "location": "Houston",
+            "location_id": None,
             "description": "",
             "image_url": "",
         }
@@ -98,19 +98,36 @@ def factories(db_session: Session) -> Factories:
         return {
             "name": f"Event {n}",
             "description": "desc",
-            "location": "Houston",
+            "location_id": None,
             "urgency": dbmodels.EventUrgency.LOW,
             "capacity": 5,
+            "assigned": 0,
             "day": date(2025, 12, 4),
             "start_time": time(4, 30, 0),
             "end_time": time(7, 30, 0),
-            # org_id will be filled automatically if not provided
         }
 
     class F:
         def volunteer(self, **overrides: Any) -> dbmodels.Volunteer:
             n = next(counter)
             data = {**_volunteer_defaults(n), **overrides}
+
+            # Create location if not provided
+            if data.get("location_id") is None:
+                location = dbmodels.Location(
+                    address="1100 Congress Ave.",
+                    city="Austin",
+                    state="Texas",
+                    country="USA",
+                    zip_code="78701",
+                    latitude=30.276513,
+                    longitude=-97.739758,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+                db_session.add(location)
+                db_session.flush()
+                data["location_id"] = location.id
             v = dbmodels.Volunteer(**data)
             db_session.add(v)
             db_session.commit()
@@ -127,6 +144,23 @@ def factories(db_session: Session) -> Factories:
         def organization(self, **overrides: Any) -> dbmodels.Organization:
             n = next(counter)
             data = {**_organization_defaults(n), **overrides}
+
+            # Create location if not provided
+            if data.get("location_id") is None:
+                location = dbmodels.Location(
+                    address="1100 Congress Ave.",
+                    city="Austin",
+                    state="Texas",
+                    country="USA",
+                    zip_code="78701",
+                    latitude=30.276513,
+                    longitude=-97.739758,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+                db_session.add(location)
+                db_session.flush()
+                data["location_id"] = location.id
             org = dbmodels.Organization(**data)
             db_session.add(org)
             db_session.commit()
@@ -136,13 +170,28 @@ def factories(db_session: Session) -> Factories:
             n = next(counter)
             data = {**_event_defaults(n), **overrides}
 
-            # Allow passing an Organization instance directly
+            # Create location if not provided
+            if data.get("location_id") is None:
+                location = dbmodels.Location(
+                    address="1100 Congress Ave.",
+                    city="Austin",
+                    state="Texas",
+                    country="USA",
+                    zip_code="78701",
+                    latitude=30.276513,
+                    longitude=-97.739758,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+                db_session.add(location)
+                db_session.flush()
+                data["location_id"] = location.id
+
             org_obj = data.pop("org", None)
             if org_obj is not None:
                 data["org_id"] = org_obj.id
 
-            # If no org_id provided, auto-create an organization
-            if "org_id" not in data or data["org_id"] is None:
+            if data.get("org_id") is None:
                 org = self.organization()
                 data["org_id"] = org.id
 

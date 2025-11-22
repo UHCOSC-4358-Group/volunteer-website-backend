@@ -40,7 +40,13 @@ def _volunteer_create_defaults(n: int) -> Dict[str, Any]:
         "first_name": f"First{n}",
         "last_name": f"Last{n}",
         "description": "test_volunteer",
-        "location": "Houston",
+        "location": pydanticmodels.Location(
+            address="1100 Congress Ave.",
+            city="Austin",
+            state="Texas",
+            country="USA",
+            zip_code="78701",
+        ),
         "skills": ["x"],
         "available_times": [
             pydanticmodels.AvailableTime(
@@ -66,7 +72,13 @@ def _event_create_defaults(n: int) -> Dict[str, Any]:
         "location": "Houston",
         "urgency": pydanticmodels.EventUrgency.LOW,
         "capacity": 5,
-        # Pass a real org_id from your test when needed; default keeps it simple
+        "location": pydanticmodels.Location(
+            address="1100 Congress Ave.",
+            city="Austin",
+            state="Texas",
+            country="USA",
+            zip_code="78701",
+        ),
         "org_id": 1,
         "needed_skills": ["x"],
         "day": date(2025, 12, 4),
@@ -101,7 +113,13 @@ def _org_create_defaults(n: int) -> Dict[str, Any]:
     return {
         "name": f"x{n}",
         "description": "test_organization",
-        "location": "Houston",
+        "location": pydanticmodels.Location(
+            address="1100 Congress Ave.",
+            city="Austin",
+            state="Texas",
+            country="USA",
+            zip_code="78701",
+        ),
     }
 
 

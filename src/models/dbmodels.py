@@ -149,7 +149,7 @@ class Organization(Base):
     # Foreign key to Location (RESTRICT on delete - cannot delete location if org uses it)
     location_id: Mapped[int] = mapped_column(
         ForeignKey("location.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 
@@ -226,7 +226,7 @@ class Event(Base):
     # Foreign key to Location (RESTRICT on delete - cannot delete location if event uses it)
     location_id: Mapped[int] = mapped_column(
         ForeignKey("location.id", ondelete="RESTRICT"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
 

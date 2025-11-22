@@ -16,8 +16,9 @@ def test_create_volunteer(db_session: Session):
 
     vol = volunteer.build(first_name="Ricky", last_name="Trevizo", skills=vol_skills)
 
+    latlong = (-1, -1)
     # Create new volunteer
-    db_vol = crud.create_volunteer(db_session, vol)
+    db_vol = crud.create_volunteer(db_session, vol, None, latlong)
 
     assert db_vol is not None
     assert db_vol.first_name == "Ricky"
@@ -129,7 +130,9 @@ def test_create_new_org(db_session: Session, factories: Factories):
 
     org_create = org.build(name=NAME)
 
-    db_org = crud.create_new_org(db_session, org_create, admin_obj.id)
+    latlong = (-1, -1)
+
+    db_org = crud.create_new_org(db_session, org_create, admin_obj.id, None, latlong)
 
     assert db_org.name == NAME
 
@@ -190,10 +193,12 @@ def test_update_org_helper(db_session: Session, factories: Factories):
     old_org_image_url_1 = org_obj_1.image_url
 
     org_updates_1 = pydanticmodels.OrgUpdate(
-        name=None, description=None, location=None, image_url=None
+        name=None,
+        description=None,
+        location=None,
     )
 
-    new_org_1 = crud.update_org_helper(org_obj_1, org_updates_1)
+    new_org_1 = crud.update_org_helper(org_obj_1, org_updates_1, None, None)
 
     assert new_org_1.name == old_org_name_1
     assert new_org_1.location == old_org_location_1
@@ -203,19 +208,27 @@ def test_update_org_helper(db_session: Session, factories: Factories):
     org_obj_2 = factories.organization()
 
     NAME = "Org"
-    LOCATION = "San Antonio"
+    LOCATION = pydanticmodels.Location(
+        address="1000 Congress Ave.",
+        city="Austin",
+        state="Texas",
+        country="USA",
+        zip_code="78701",
+    )
 
     old_org_description_2 = org_obj_2.description
     old_org_image_url_2 = org_obj_2.image_url
 
     org_updates_2 = pydanticmodels.OrgUpdate(
-        name=NAME, location=LOCATION, description=None, image_url=None
+        name=NAME, location=LOCATION, description=None
     )
 
-    new_org_2 = crud.update_org_helper(org_obj_2, org_updates_2)
+    latlong = (276513, 739758)
+
+    new_org_2 = crud.update_org_helper(org_obj_2, org_updates_2, None, latlong)
 
     assert new_org_2.name == NAME
-    assert new_org_2.location == LOCATION
+    assert new_org_2.location.address == LOCATION.address
     assert new_org_2.description == old_org_description_2
     assert new_org_2.image_url == old_org_image_url_2
 
@@ -232,11 +245,11 @@ def test_update_org(db_session: Session, factories: Factories):
     old_org_location = db_org.location
     old_org_description = db_org.description
 
-    org_updates = pydanticmodels.OrgUpdate(
-        name=NAME, image_url=IMAGE_URL, location=None, description=None
-    )
+    org_updates = pydanticmodels.OrgUpdate(name=NAME, location=None, description=None)
 
-    updated_org = crud.update_org(db_session, org_id, org_updates, admin_obj.id)
+    updated_org = crud.update_org(
+        db_session, org_id, org_updates, admin_obj.id, IMAGE_URL
+    )
 
     assert updated_org.name == NAME
     assert updated_org.image_url == IMAGE_URL
@@ -246,21 +259,21 @@ def test_update_org(db_session: Session, factories: Factories):
     # Fake org id
     FAKE_ID = -5
     with pytest.raises(error.NotFoundError) as exc:
-        crud.update_org(db_session, FAKE_ID, org_updates, admin_obj.id)
+        crud.update_org(db_session, FAKE_ID, org_updates, admin_obj.id, None)
 
     assert exc.value.status_code == 404
 
     # Fake admin id
     ADMIN_FAKE_ID = -5
     with pytest.raises(error.NotFoundError) as exc:
-        crud.update_org(db_session, org_id, org_updates, ADMIN_FAKE_ID)
+        crud.update_org(db_session, org_id, org_updates, ADMIN_FAKE_ID, None)
 
     assert exc.value.status_code == 404
 
     # Non authorized admin
     non_auth_admin = factories.admin()
     with pytest.raises(error.AuthorizationError) as exc:
-        crud.update_org(db_session, org_id, org_updates, non_auth_admin.id)
+        crud.update_org(db_session, org_id, org_updates, non_auth_admin.id, None)
 
     assert exc.value.status_code == 403
 
@@ -288,8 +301,10 @@ def test_create_org_event(db_session: Session, factories: Factories):
 
     event_create_obj = event.build(org_id=org_obj.id, needed_skills=["Cooking"])
 
-    new_event: dbmodels.Event = crud.create_org_event(
-        db_session, event_create_obj, admin_obj.id
+    latlong = (30.276513, -97.739758)
+
+    new_event = crud.create_org_event(
+        db_session, event_create_obj, admin_obj.id, None, latlong
     )
 
     db_session.refresh(org_obj)
@@ -334,14 +349,14 @@ def test_update_event_helper(db_session: Session, factories: Factories):
 
     event_updates_obj = pydanticmodels.EventUpdate(
         name=NAME,
-        required_skills=REQUIRED_SKILLS,
+        needed_skills=REQUIRED_SKILLS,
         description=None,
         location=None,
         urgency=None,
         capacity=None,
     )
 
-    updated_event = crud.update_event_helper(event_obj, event_updates_obj)
+    updated_event = crud.update_event_helper(event_obj, event_updates_obj, None)
 
     assert updated_event.name == NAME
     assert updated_event.description == old_event_description
@@ -353,7 +368,7 @@ def test_update_event_helper(db_session: Session, factories: Factories):
 
     event_updates_obj = pydanticmodels.EventUpdate(
         name=None,
-        required_skills=None,
+        needed_skills=None,
         description=None,
         location=None,
         urgency=None,
@@ -361,7 +376,7 @@ def test_update_event_helper(db_session: Session, factories: Factories):
     )
 
     with pytest.raises(ValueError) as exc:
-        crud.update_event_helper(capacity_event, event_updates_obj)
+        crud.update_event_helper(capacity_event, event_updates_obj, None)
 
     assert (
         exc.value.args[0]
@@ -381,7 +396,7 @@ def test_update_org_event(db_session: Session, factories: Factories):
 
     event_updates_obj = pydanticmodels.EventUpdate(
         name=UPDATED_NAME,
-        required_skills=None,
+        needed_skills=None,
         description=UPDATED_DESCRIPTION,
         location=None,
         urgency=None,
@@ -389,7 +404,7 @@ def test_update_org_event(db_session: Session, factories: Factories):
     )
 
     updated_event: dbmodels.Event = crud.update_org_event(
-        db_session, event_to_be_updated.id, event_updates_obj, org_admin.id
+        db_session, event_to_be_updated.id, event_updates_obj, org_admin.id, None
     )
 
     assert updated_event.name == UPDATED_NAME
@@ -400,7 +415,7 @@ def test_update_org_event(db_session: Session, factories: Factories):
     EVENT_FAKE_ID = -5
     with pytest.raises(error.NotFoundError) as exc:
         crud.update_org_event(
-            db_session, EVENT_FAKE_ID, event_updates_obj, org_admin.id
+            db_session, EVENT_FAKE_ID, event_updates_obj, org_admin.id, None
         )
 
     assert exc.value.status_code == 404
@@ -409,7 +424,7 @@ def test_update_org_event(db_session: Session, factories: Factories):
     ADMIN_FAKE_ID = -5
     with pytest.raises(error.NotFoundError) as exc:
         crud.update_org_event(
-            db_session, event_to_be_updated.id, event_updates_obj, ADMIN_FAKE_ID
+            db_session, event_to_be_updated.id, event_updates_obj, ADMIN_FAKE_ID, None
         )
 
     assert exc.value.status_code == 404
@@ -418,7 +433,11 @@ def test_update_org_event(db_session: Session, factories: Factories):
     non_auth_admin = factories.admin()
     with pytest.raises(error.AuthorizationError) as exc:
         crud.update_org_event(
-            db_session, event_to_be_updated.id, event_updates_obj, non_auth_admin.id
+            db_session,
+            event_to_be_updated.id,
+            event_updates_obj,
+            non_auth_admin.id,
+            None,
         )
 
     assert exc.value.status_code == 403
