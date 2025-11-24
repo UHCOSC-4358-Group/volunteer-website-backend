@@ -150,90 +150,26 @@ async def logout(
 
 ## Geocoding and Distance Calculation with Normalized Location Table
 
+### Status: ✅ COMPLETED (Database Schema & Models)
+
 ### Overview
-Implement geocoding functionality with a normalized `Location` table to store geographic information (address, latitude, longitude) separately. This approach eliminates data duplication since multiple entities (volunteers, events, organizations) share the same location model structure.
+Implement geospatial functionality with a normalized `Location` table using PostgreSQL and PostGIS extension to store geographic information (address, coordinates) separately. This approach eliminates data duplication since multiple entities (volunteers, events, organizations) share the same location model structure.
 
-### Current State
-- Event, Volunteer, and Organization models each have a `location: str` field
-- No coordinate storage or distance calculation capability
-- Location data is duplicated across tables
-- Matching algorithm in `match_volunteers_to_event()` doesn't consider location
+### Completed Work
 
-### Why a Separate Location Table?
-**Benefits:**
-1. **DRY Principle**: Avoid repeating latitude, longitude, and address fields in every table
-2. **Data Integrity**: Consistent location format across all entities
-3. **Efficient Updates**: Update geocoding logic in one place
-4. **Reusability**: Multiple entities can reference the same physical location
-5. **Easier Migration**: Centralized location data makes future spatial queries simpler
+#### ✅ Database Schema
+- Created `location` table with PostGIS `GEOGRAPHY(POINT, 4326)` type
+- Implemented foreign key relationships:
+  - Volunteer → Location (SET NULL on delete - optional location)
+  - Event → Location (RESTRICT on delete - required location)
+  - Organization → Location (RESTRICT on delete - required location)
+- Added `created_at` and `updated_at` timestamps
+- Created spatial GIST index on `coordinates` column for optimal query performance
 
-**Trade-offs:**
-- Additional JOIN operations for queries
-- Slightly more complex relationships
-- Need to manage location lifecycle (when to create/update/delete)
-
-### Use Cases
-1. **Volunteer Matching**: Prioritize volunteers closer to event locations
-2. **Event Discovery**: Allow volunteers to search events within a specific radius
-3. **Organization Mapping**: Show all events/volunteers associated with an organization's area
-4. **Statistics**: Generate insights on volunteer coverage and service areas
-
-### Proposed Changes
-
-#### 1. Database Schema Updates
-
-**New `locations` table:**
-```sql
-CREATE TABLE locations (
-    id SERIAL PRIMARY KEY,
-    address VARCHAR(255) NOT NULL,
-    city VARCHAR(100),
-    state VARCHAR(50),
-    zip_code VARCHAR(20),
-    country VARCHAR(100) DEFAULT 'USA',
-    latitude DECIMAL(10, 8),
-    longitude DECIMAL(11, 8),
-    geocoded_at TIMESTAMP,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW(),
-    UNIQUE(address, city, state, zip_code)  -- Prevent duplicate locations
-);
-
-CREATE INDEX idx_locations_coordinates ON locations(latitude, longitude);
-CREATE INDEX idx_locations_zip ON locations(zip_code);
-```
-
-**Update existing tables to reference `locations`:**
-```sql
--- Update volunteers table
-ALTER TABLE volunteer DROP COLUMN location;
-ALTER TABLE volunteer ADD COLUMN location_id INTEGER;
-ALTER TABLE volunteer ADD CONSTRAINT fk_volunteer_location 
-    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL;
-
--- Update events table
-ALTER TABLE event DROP COLUMN location;
-ALTER TABLE event ADD COLUMN location_id INTEGER NOT NULL;
-ALTER TABLE event ADD CONSTRAINT fk_event_location 
-    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT;
-
--- Update organizations table
-ALTER TABLE organization DROP COLUMN location;
-ALTER TABLE organization ADD COLUMN location_id INTEGER NOT NULL;
-ALTER TABLE organization ADD CONSTRAINT fk_organization_location 
-    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE RESTRICT;
-```
-
-**Foreign Key Deletion Strategies:**
-- **Volunteer**: `SET NULL` - If location is deleted, volunteer remains but without location
-- **Event**: `RESTRICT` - Cannot delete location if events reference it (events require location)
-- **Organization**: `RESTRICT` - Cannot delete location if organizations reference it
-
-#### 2. Updated SQLAlchemy Models in `src/models/dbmodels.py`
-
+#### ✅ SQLAlchemy Models (src/models/dbmodels.py)
 ```python
 class Location(Base):
-    __tablename__ = "locations"
+    __tablename__ = "location"
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     address: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -241,479 +177,457 @@ class Location(Base):
     state: Mapped[str] = mapped_column(String(50), nullable=True)
     zip_code: Mapped[str] = mapped_column(String(20), nullable=True)
     country: Mapped[str] = mapped_column(String(100), default="USA", server_default="USA")
-    latitude: Mapped[float] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float] = mapped_column(Float, nullable=True)
-    geocoded_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    coordinates: Mapped[str] = mapped_column(Geography(geometry_type="POINT", srid=4326), nullable=True)
+    created_at: Mapped[datetime]
+    updated_at: Mapped[datetime]
     
-    # Relationships
-    volunteers: Mapped[List["Volunteer"]] = relationship(back_populates="location")
-    events: Mapped[List["Event"]] = relationship(back_populates="location")
-    organizations: Mapped[List["Organization"]] = relationship(back_populates="location")
-
-
-class Volunteer(Base):
-    # ...existing fields...
-    
-    location_id: Mapped[int] = mapped_column(
-        ForeignKey("locations.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True
-    )
-    location: Mapped["Location"] = relationship(back_populates="volunteers")
-
-
-class Event(Base):
-    # ...existing fields...
-    
-    location_id: Mapped[int] = mapped_column(
-        ForeignKey("locations.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True
-    )
-    location: Mapped["Location"] = relationship(back_populates="events")
-
-
-class Organization(Base):
-    # ...existing fields...
-    
-    location_id: Mapped[int] = mapped_column(
-        ForeignKey("locations.id", ondelete="RESTRICT"),
-        nullable=False,
-        index=True
-    )
-    location: Mapped["Location"] = relationship(back_populates="organizations")
+    # Relationships established with all entity types
 ```
 
-#### 3. Updated Pydantic Models in `src/models/pydanticmodels.py`
+#### ✅ Technology Stack
+- **Database**: PostgreSQL (migrated from SQLite)
+- **Spatial Extension**: PostGIS for native geospatial support
+- **ORM Integration**: GeoAlchemy2 for PostGIS types in SQLAlchemy
+- **Coordinate System**: WGS84 (SRID 4326) - standard for GPS coordinates
 
+### Current State
+- ✅ Location table created and integrated
+- ✅ All models updated to use `location_id` foreign keys
+- ✅ PostGIS extension enabled
+- ✅ Spatial indexing configured
+- ⏳ No data migration needed (empty database)
+- ❌ Geocoding service not yet integrated
+- ❌ Distance calculation functions not yet implemented
+- ❌ Location CRUD operations not yet implemented
+- ❌ API endpoints not yet created
+- ❌ Matching algorithm not yet updated
+
+### Benefits of PostgreSQL + PostGIS Approach
+
+1. **Native Spatial Types**
+   - `GEOGRAPHY(POINT)` type handles Earth's curvature automatically
+   - No manual Haversine formula needed
+   - More accurate distance calculations
+
+2. **Performance**
+   - GIST spatial indexes provide 10-100x faster queries than lat/lon indexes
+   - Built-in spatial query optimization
+   - Efficient radius searches
+
+3. **Simplified Queries**
+   - `ST_Distance()` - Calculate distance between points
+   - `ST_DWithin()` - Find points within radius (uses index automatically)
+   - `ST_MakePoint()` - Create point geometries
+   - No complex mathematical formulas in application code
+
+4. **Industry Standard**
+   - PostGIS used by Uber, Foursquare, and major mapping services
+   - Extensive documentation and community support
+   - Compatible with GIS tools and standards
+
+### Next Steps
+
+#### Phase 1: Location CRUD Operations (Priority: HIGH)
+Implement basic location management:
+- `get_or_create_location()` - Find existing or create new location
+- `update_location()` - Update location details and coordinates
+- `delete_location()` - Handle location deletion with foreign key constraints
+- `get_location_by_id()` - Retrieve location with relationships
+
+**Estimated Effort**: 1-2 days
+
+#### Phase 2: Geospatial Query Functions (Priority: HIGH)
+Leverage PostGIS for distance calculations:
 ```python
-class LocationBase(BaseModel):
-    address: str
-    city: str | None = None
-    state: str | None = None
-    zip_code: str | None = None
-    country: str = "USA"
+# src/dependencies/database/geospatial.py
 
-class LocationCreate(LocationBase):
-    pass
-
-class LocationResponse(LocationBase):
-    id: int
-    latitude: float | None = None
-    longitude: float | None = None
-    geocoded_at: datetime | None = None
-    
-    class Config:
-        from_attributes = True
-
-# Update existing models to use LocationCreate instead of string
-class EventCreate(BaseModel):
-    name: str
-    description: str
-    location: LocationCreate  # Changed from str
-    # ...other fields...
-
-class EventResponse(BaseModel):
-    id: int
-    name: str
-    location: LocationResponse  # Return full location object
-    # ...other fields...
-
-class VolunteerCreate(BaseModel):
-    # ...existing fields...
-    location: LocationCreate | None = None  # Optional for volunteers
-
-class VolunteerResponse(BaseModel):
-    id: int
-    # ...existing fields...
-    location: LocationResponse | None = None
-```
-
-#### 4. Geocoding Service Integration
-
-Choose a geocoding API provider:
-
-**Recommended: Mapbox Geocoding API**
-- Good accuracy and address parsing
-- Generous free tier (100,000 requests/month)
-- Good documentation and Python support
-
-**New utility file: `src/util/geocoding.py`**
-```python
-import httpx
-from typing import Optional
-from datetime import datetime
-
-async def geocode_address(
-    address: str,
-    city: Optional[str] = None,
-    state: Optional[str] = None,
-    zip_code: Optional[str] = None
-) -> tuple[float, float, str]:
-    """
-    Convert address components to (latitude, longitude, formatted_address).
-    
-    Returns:
-        tuple: (latitude, longitude, formatted_address)
-    Raises:
-        ValueError: If geocoding fails or address is invalid
-    """
-    # Build full address string
-    # Call geocoding API
-    # Parse and return coordinates
-
-async def calculate_distance(
-    lat1: float, lon1: float,
-    lat2: float, lon2: float,
-    unit: str = "miles"
-) -> float:
-    """
-    Calculate distance between two points using Haversine formula.
-    
-    Args:
-        lat1, lon1: First coordinate pair
-        lat2, lon2: Second coordinate pair
-        unit: "miles" or "kilometers"
-    
-    Returns:
-        float: Distance in specified unit
-    """
-    # Implement Haversine formula
-
-async def reverse_geocode(lat: float, lon: float) -> dict:
-    """
-    Convert coordinates to address components.
-    
-    Returns:
-        dict: {address, city, state, zip_code, country}
-    """
-    pass
-```
-
-#### 5. Location CRUD Operations in `src/dependencies/database/crud.py`
-
-```python
-def get_or_create_location(
+def get_volunteers_within_radius(
     db: Session,
-    location_data: LocationCreate,
-    geocode: bool = True
-) -> Location:
+    center_lat: float,
+    center_lon: float,
+    radius_miles: float,
+    distance_type: Literal["km", "mile"] = "mile"
+) -> list[tuple[Volunteer, float]]:
     """
-    Get existing location or create new one with geocoding.
+    Uses ST_DWithin with GIST index for optimal performance.
+    """
+    pass
+
+def get_events_within_radius(
+    db: Session,
+    center_lat: float,
+    center_lon: float,
+    radius_miles: float
+) -> list[tuple[Event, float]]:
+    """
+    Returns events sorted by distance.
+    """
+    pass
+```
+
+**Estimated Effort**: 2-3 days
+
+#### Phase 3: Geocoding Integration (Priority: MEDIUM)
+Integrate external geocoding service:
+- Choose provider (Mapbox, Google Maps, or Nominatim)
+- Implement `geocode_address()` function
+- Add error handling and retry logic
+- Configure rate limiting
+
+**Estimated Effort**: 2-3 days
+
+#### Phase 4: Enhanced Matching Algorithm (Priority: MEDIUM)
+Update `match_volunteers_to_event()` in `relations.py`:
+- Replace location string comparison with distance calculation
+- Add distance weighting to scoring algorithm
+- Filter volunteers within configurable radius
+- Sort results by composite score (skills + schedule + distance)
+
+**Estimated Effort**: 1-2 days
+
+#### Phase 5: API Endpoints (Priority: LOW)
+Create location-related endpoints:
+```python
+# src/routers/location.py
+
+POST /locations/geocode
+# Input: address components
+# Output: coordinates
+
+GET /locations/{location_id}
+# Output: full location details
+
+GET /events/nearby?lat={lat}&lon={lon}&radius={miles}
+# Output: events within radius
+
+GET /volunteers/nearby?lat={lat}&lon={lon}&radius={miles}  
+# Output: volunteers within radius (admin only)
+```
+
+**Estimated Effort**: 2-3 days
+
+#### Phase 6: Testing & Documentation (Priority: HIGH)
+- Unit tests for location CRUD operations
+- Integration tests for geospatial queries
+- Mock geocoding API in tests
+- Update API documentation
+- Add configuration examples
+
+**Estimated Effort**: 2-3 days
+
+### Design Decisions Made
+
+✅ **Location Storage Strategy**
+- **Decision**: Use single `coordinates` column (PostGIS GEOGRAPHY type)
+- **Rationale**: PostGIS handles all geospatial operations natively
+- **Trade-off**: Removed separate `latitude` and `longitude` columns to avoid duplication
+
+✅ **Foreign Key Constraints**
+- **Volunteer**: `SET NULL` - Volunteers can exist without location
+- **Event**: `RESTRICT` - Events require location, prevent accidental deletion
+- **Organization**: `RESTRICT` - Organizations require location
+
+✅ **Coordinate System**
+- **Decision**: WGS84 (SRID 4326)
+- **Rationale**: Standard GPS coordinate system, compatible with all mapping services
+
+✅ **Database Choice**
+- **Decision**: PostgreSQL with PostGIS
+- **Rationale**: Native spatial support, much better performance than SQLite for geospatial queries
+
+### Outstanding Design Decisions
+
+❓ **Geocoding Strategy**
+- **Options**:
+  1. Geocode immediately on location creation (simpler, always available)
+  2. Geocode on first access/lazy loading (faster writes)
+  3. Background job after creation (best performance, more complex)
+- **Recommendation**: Start with option 1, consider background jobs if performance becomes issue
+
+❓ **Geocoding Provider**
+- **Options**:
+  1. **Mapbox** - Good accuracy, 100k free requests/month
+  2. **Google Maps** - Most accurate, $200 free credit/month
+  3. **Nominatim (OSM)** - Free, open source, but rate-limited
+- **Recommendation**: Mapbox for balance of cost and features
+
+❓ **Error Handling for Geocoding Failures**
+- Should events be created with just address but no coordinates?
+- Should we fail the entire creation if geocoding fails?
+- **Recommendation**: Allow creation with `coordinates = NULL`, retry geocoding in background
+
+❓ **Location Sharing vs Duplication**
+- Should multiple entities share same `Location` record?
+- Or should each entity get its own `Location` record?
+- **Recommendation**: Share locations where address matches (use `get_or_create_location()`), but allow flexibility
+
+❓ **Privacy for Volunteer Locations**
+- Should we store exact addresses for volunteers?
+- Consider storing only zip code centroids for privacy
+- Who should have access to precise volunteer locations?
+- **Recommendation**: Store full address but add privacy controls in API layer
+
+### Configuration Needed
+
+Add to `.env`:
+```
+# Geocoding
+GEOCODING_PROVIDER=mapbox
+MAPBOX_API_KEY=your_api_key_here
+GEOCODING_RATE_LIMIT=50
+
+# Distance defaults
+MAX_DISTANCE_FOR_MATCHING=50
+DEFAULT_DISTANCE_UNIT=mile
+
+# Feature flags
+GEOCODE_ON_CREATE=true
+ALLOW_NULL_COORDINATES=true
+```
+
+### Required Dependencies
+
+Already added to `requirements.txt`:
+```
+geoalchemy2>=0.14.0
+psycopg2-binary>=2.9.9
+```
+
+Still needed:
+```
+httpx>=0.24.0              # For geocoding API calls
+```
+
+### Testing Considerations
+
+**Spatial Query Testing:**
+- Test distance calculations with known coordinates
+- Test radius searches with various distances
+- Test GIST index performance with large datasets
+- Mock geocoding API in unit tests
+
+**Edge Cases:**
+- Null coordinates handling
+- Invalid coordinate values
+- Events/volunteers at same location
+- Locations near poles (edge case for spherical calculations)
+
+### Performance Considerations
+
+✅ **Already Implemented:**
+- GIST spatial index on `coordinates`
+- Native PostGIS distance calculations
+
+🔄 **Still Needed:**
+- Geocoding result caching
+- API rate limiting
+- Query result caching for popular searches
+- Consider materialized views for frequent queries
+
+### Related Files
+
+**Completed:**
+- ✅ `src/models/dbmodels.py` - Location model and relationships
+- ✅ Database schema - PostGIS-enabled PostgreSQL
+
+**In Progress:**
+- 🔄 `src/models/pydanticmodels.py` - Need Location schemas
+- 🔄 `src/dependencies/database/crud.py` - Need location CRUD operations
+
+**Not Started:**
+- ❌ `src/util/geocoding.py` - Geocoding utilities
+- ❌ `src/dependencies/database/geospatial.py` - Distance queries
+- ❌ `src/routers/location.py` - Location API endpoints
+- ❌ `src/dependencies/database/relations.py` - Update matching algorithm
+- ❌ `src/tests/database/test_geospatial.py` - Spatial query tests
+
+### Resources & Documentation
+
+- [PostGIS Documentation](https://postgis.net/documentation/)
+- [GeoAlchemy2 Documentation](https://geoalchemy-2.readthedocs.io/)
+- [Mapbox Geocoding API](https://docs.mapbox.com/api/search/geocoding/)
+- [Understanding SRID 4326](https://epsg.io/4326)
+
+### Notes
+- No data migration needed as database is empty
+- Removed `latitude` and `longitude` columns to avoid duplication with `coordinates`
+- PostGIS handles coordinate extraction when needed: `ST_X(coordinates)`, `ST_Y(coordinates)`
+
+---
+
+## Enhanced Volunteer-Event Matching with Distance Filtering
+
+### Status: 🔄 IN PROGRESS (Ready for Implementation)
+
+### Overview
+Upgrade the `match_volunteers_to_event()` function to use a two-phase matching process:
+1. **Phase 1**: Filter volunteers within a configurable radius using PostGIS
+2. **Phase 2**: Score filtered volunteers based on distance, skills, and schedule
+
+This approach combines the efficiency of spatial indexing with comprehensive scoring.
+
+### Current State
+- ✅ Location table with PostGIS support exists
+- ✅ `scoring.py` has modular scoring components
+- ✅ `geocoding.py` provides address-to-coordinates conversion
+- ✅ `geospatial.py` has `get_volunteers_within_radius()` function
+- ❌ Old `match_volunteers_to_event()` uses string comparison for location
+- ❌ Distance not factored into scoring algorithm
+
+### Proposed Architecture
+
+#### Phase 1: Spatial Filtering (Database Layer)
+```python
+# src/dependencies/database/geospatial.py
+
+def get_volunteers_within_radius(
+    db: Session,
+    center_lat: float,
+    center_lon: float,
+    radius_miles: float,
+    distance_type: Literal["km", "mile"] = "mile"
+) -> list[tuple[Volunteer, float]]:
+    """
+    Uses PostGIS ST_DWithin for efficient spatial filtering.
+    
+    Returns:
+        List of (Volunteer, distance) tuples within radius.
+        Distance is in the specified unit (km or miles).
+    """
+    # Uses GIST index for fast spatial lookup
+    # Calculates actual distance for each result
+    # Returns sorted by distance (closest first)
+```
+
+**Benefits:**
+- Uses spatial index for O(log n) performance
+- Reduces candidates before complex scoring
+- Filters out volunteers too far away immediately
+
+#### Phase 2: Composite Scoring (Application Layer)
+```python
+# src/dependencies/database/relations.py
+
+def match_volunteers_to_event_enhanced(
+    db: Session,
+    event_id: int,
+    admin_id: int,
+    max_distance: float = 25.0,
+    distance_unit: Literal["km", "mile"] = "mile"
+) -> list[tuple[Volunteer, float, dict]]:
+    """
+    Two-phase matching process:
+    1. Spatial filter: Get volunteers within max_distance
+    2. Composite scoring: Calculate skills + schedule + distance scores
     
     Args:
         db: Database session
-        location_data: Location information
-        geocode: Whether to geocode address immediately
+        event_id: Event to match volunteers to
+        admin_id: Admin making the request (for auth)
+        max_distance: Maximum search radius
+        distance_unit: Unit for distance (km or mile)
     
     Returns:
-        Location: Existing or newly created location
+        List of (Volunteer, total_score, score_breakdown) tuples
+        sorted by total_score descending.
+        
+        score_breakdown = {
+            "distance_score": float,  # 0-4 points
+            "skills_score": int,      # 0-2 points
+            "schedule_score": int,    # 0-4 points
+            "total": float            # 0-10 points
+        }
     """
-    # Check if location already exists (by address + city + state + zip)
-    # If exists, return existing location
-    # If not, create new location
-    # If geocode=True, call geocoding service and populate lat/lon
-    # Return location
-
-def update_location(
-    db: Session,
-    location_id: int,
-    location_updates: LocationCreate
-) -> Location:
-    """
-    Update location and re-geocode if address changed.
-    """
-    # Update location fields
-    # If address changed, re-geocode
-    # Update geocoded_at timestamp
-
-def get_locations_within_radius(
-    db: Session,
-    lat: float,
-    lon: float,
-    radius_miles: float
-) -> list[Location]:
-    """
-    Find all locations within radius of given coordinates.
-    Uses bounding box approximation for efficiency.
-    """
-    # Calculate bounding box
-    # Query locations within box
-    # Filter by precise Haversine distance
 ```
 
-#### 6. Updated Event/Volunteer CRUD Operations
+### Implementation Steps
 
-Modify existing CRUD functions to handle location creation:
-
-```python
-def create_org_event(
-    db: Session,
-    event: EventCreate,
-    admin_id: int
-) -> Event:
-    # Validate admin authorization
-    
-    # Create or get location
-    location = get_or_create_location(db, event.location, geocode=True)
-    
-    # Create event with location_id
-    new_event = Event(
-        name=event.name,
-        description=event.description,
-        location_id=location.id,
-        # ...other fields...
-    )
-    
-    db.add(new_event)
-    db.commit()
-    db.refresh(new_event)
-    
-    return new_event
-
-def update_org_event(
-    db: Session,
-    event_id: int,
-    event_updates: EventUpdate,
-    admin_id: int
-) -> Event:
-    # Find event and validate authorization
-    
-    # If location is being updated
-    if event_updates.location is not None:
-        location = get_or_create_location(db, event_updates.location, geocode=True)
-        event.location_id = location.id
-    
-    # Update other fields
-    # Commit changes
-```
-
-#### 7. New API Endpoints
-
-**Location-specific endpoints in `src/routers/location.py`:**
-```python
-GET /locations/{location_id}
-# Returns: LocationResponse with coordinates
-
-POST /locations/geocode
-# Body: LocationCreate
-# Returns: LocationResponse with geocoded coordinates
-
-GET /locations/nearby?lat={lat}&lon={lon}&radius={miles}
-# Returns: List[LocationResponse] within radius
-```
-
-**Enhanced event endpoints in `src/routers/event.py`:**
-```python
-GET /events/nearby?lat={lat}&lon={lon}&radius={miles}
-# Returns: List of events within radius, sorted by distance
-
-GET /events/nearby?zip_code={zip}&radius={miles}
-# Alternative: search by zip code instead of coordinates
-```
-
-#### 8. Enhanced Matching Algorithm
-
-Update `match_volunteers_to_event()` in `src/dependencies/database/relations.py`:
-
+#### Step 1: Update `match_volunteers_to_event()` Function
+Replace the existing function in `relations.py`:
 ```python
 def match_volunteers_to_event(
     db: Session,
     event_id: int,
     admin_id: int,
-    max_distance_miles: float = 50.0,
-    distance_weight: float = 0.3
-) -> list[tuple[Volunteer, float]]:
+    max_distance: float = 25.0,
+    distance_unit: Literal["km", "mile"] = "mile"
+) -> list[tuple[Volunteer, float, dict]]:
     """
-    Match volunteers to event considering skills, availability, AND distance.
+    Enhanced matching with distance filtering:
+    1. Filter volunteers within max_distance using geospatial query
+    2. Score based on skills, schedule, and distance
     
     Args:
-        max_distance_miles: Maximum distance to consider volunteers
-        distance_weight: How much distance affects score (0.0 to 1.0)
+        db: Database session
+        event_id: Event ID to match volunteers to
+        admin_id: Admin ID (for permissions)
+        max_distance: Maximum distance to consider (configurable)
+        distance_unit: Unit for distance (kilometers or miles)
     
     Returns:
-        List of (volunteer, match_score) tuples, sorted by score descending
+        List of tuples containing Volunteer object, distance, and score breakdown:
+        - distance_score: 0-4 points based on closeness
+        - skills_score: 0-2 points based on skill match
+        - schedule_score: 0-4 points based on availability
+        - total: 0-10 total points
     """
-    # Get event with location
-    event = db.query(Event).filter(Event.id == event_id).first()
-    
-    # Get volunteers with locations within max distance
-    nearby_volunteers = get_volunteers_within_distance(
-        db, 
-        event.location.latitude,
-        event.location.longitude,
-        max_distance_miles
+    # 1. Spatial filtering: Get volunteers within max_distance
+    volunteer_distances = get_volunteers_within_radius(
+        db=db,
+        center_lat=center_coordinates.latitude,
+        center_lon=center_coordinates.longitude,
+        radius_miles=max_distance,
+        distance_type=distance_unit
     )
     
-    # Calculate composite score:
-    # score = (skill_match * (1 - distance_weight)) + (distance_score * distance_weight)
+    # 2. Score calculation for filtered volunteers
+    results = []
+    for volunteer, distance in volunteer_distances:
+        # Calculate individual scores (0-4 scale)
+        distance_score = max(0, 4 - distance / 10)  # Closer is better
+        skills_score = calculate_skills_score(volunteer, event)
+        schedule_score = calculate_schedule_score(volunteer, event)
+        
+        # Total score (0-10 scale)
+        total_score = distance_score + skills_score + schedule_score
+        
+        # Score breakdown for analysis
+        score_breakdown = {
+            "distance_score": distance_score,
+            "skills_score": skills_score,
+            "schedule_score": schedule_score,
+            "total": total_score
+        }
+        
+        results.append((volunteer, total_score, score_breakdown))
     
-    # Return sorted matches
+    # Sort by total score (highest first)
+    results.sort(key=lambda x: x[1], reverse=True)
+    return results
 ```
 
-### Design Decisions to Consider
+#### Step 2: Update Tests
+- Add unit tests for `get_volunteers_within_radius()`
+- Update integration tests for `match_volunteers_to_event_enhanced()`
+- Mock geocoding and distance functions as needed
 
-1. **Location Lifecycle Management**
-   - Should unused locations be automatically deleted?
-   - How to handle location updates when multiple entities reference it?
-   - Should we allow entities to share location objects or always create new ones?
+#### Step 3: Update Documentation
+- Update API documentation for new endpoint
+- Add configuration examples for distance settings
+- Document database changes and migration steps
 
-2. **Geocoding Strategy**
-   - Geocode immediately on creation (slower writes, always available)
-   - Geocode on first access (faster writes, may need lazy loading)
-   - Background job after creation (best performance, more complex)
-
-3. **Location Uniqueness**
-   - Current design: UNIQUE constraint on (address, city, state, zip_code)
-   - Should "123 Main St" in different cities be different locations? (Yes - handled by constraint)
-   - How to handle slight address variations (typos, abbreviations)?
-
-4. **Privacy Considerations**
-   - Should volunteer addresses be stored at full precision?
-   - Consider storing zip code centroid instead of exact address for volunteers
-   - Who can access precise location data?
-
-5. **Error Handling**
-   - What if geocoding fails during event creation?
-   - Should we allow creating events with just address but no coordinates?
-   - How to handle partial address information?
-
-### Configuration
-Add to `.env`:
-```
-GEOCODING_PROVIDER=mapbox
-MAPBOX_API_KEY=your_api_key_here
-GEOCODING_RATE_LIMIT=50
-MAX_DISTANCE_FOR_MATCHING=50
-GEOCODE_ON_CREATE=true
-DEFAULT_COUNTRY=USA
-```
-
-### Implementation Phases
-
-**Phase 1: Database Schema & Models (2-3 days)**
-- Create `locations` table and migration
-- Update SQLAlchemy models with relationships
-- Update Pydantic models for API contracts
-- Create database migration script
-
-**Phase 2: Location CRUD Operations (2-3 days)**
-- Implement `get_or_create_location()`
-- Implement location update logic
-- Add location querying functions
-- Update existing event/volunteer CRUD to use locations
-
-**Phase 3: Geocoding Integration (2-3 days)**
-- Choose and configure geocoding provider
-- Implement `geocode_address()` function
-- Add error handling and retry logic
-- Implement caching strategy
-
-**Phase 4: Distance Calculation (1-2 days)**
-- Implement Haversine distance formula
-- Add `get_locations_within_radius()` query
-- Create distance utility functions
-- Add unit tests for calculations
-
-**Phase 5: API Endpoints (2-3 days)**
-- Create location router and endpoints
-- Update event/volunteer endpoints to return location objects
-- Add nearby search endpoints
-- Update API documentation
-
-**Phase 6: Enhanced Matching (2-3 days)**
-- Update matching algorithm to include distance
-- Add configurable distance weights
-- Test and tune scoring algorithm
-- Add distance information to match results
-
-**Phase 7: Testing & Optimization (2-3 days)**
-- Write unit tests for all location functions
-- Integration tests with geocoding API (mocked)
-- Performance testing with large datasets
-- Add database indexes for common queries
-
-### Estimated Total Effort
-14-18 days including:
-- Database schema design and migration
-- Model updates across codebase
-- Geocoding service integration
-- Location CRUD operations
-- API endpoint creation
-- Matching algorithm updates
-- Comprehensive testing
-- Documentation updates
-- Performance optimization
-
-### Migration Strategy
-
-**Step 1: Create locations table and add foreign keys**
-```sql
--- Run migration to create locations table
--- Add nullable location_id columns to existing tables
--- Keep old location string columns temporarily
-```
-
-**Step 2: Migrate existing data**
-```python
-# Migration script to:
-# 1. Extract unique locations from existing tables
-# 2. Geocode all unique addresses (batch process)
-# 3. Populate location_id in existing records
-# 4. Verify all records have location_id
-```
-
-**Step 3: Make location_id required and drop old columns**
-```sql
--- Make location_id NOT NULL where required
--- Drop old location string columns
--- Add foreign key constraints
-```
+### Estimated Effort
+- **Function implementation**: 2-3 hours
+- **Testing**: 1-2 hours
+- **Documentation**: 1 hour
 
 ### Security Considerations
-- Rate limit geocoding endpoints to prevent API abuse
-- Store API keys securely in environment variables
-- Validate and sanitize all address inputs
-- Consider privacy implications of storing precise coordinates
-- Implement proper error handling to avoid exposing API keys
-- Add authorization checks for sensitive location data
-- Log geocoding operations for audit trail
-
-### Testing Considerations
-- Mock geocoding API calls in unit tests
-- Test with invalid/incomplete addresses
-- Test distance calculations with known coordinates (e.g., NYC to LA)
-- Test location sharing between entities
-- Test location update cascading effects
-- Integration tests with actual API (sparingly)
-- Performance tests with spatial queries
-
-### Performance Considerations
-- Cache geocoding results in database (via `geocoded_at`)
-- Index latitude/longitude columns for spatial queries
-- Consider PostgreSQL + PostGIS extension for advanced spatial queries
-- Implement bounding box filtering before precise distance calculations
-- Use database-level spatial indexes if available
-- Monitor API usage and implement rate limiting
-- Consider background workers for bulk geocoding
-- Add query result caching for popular locations
+- Validate and sanitize all inputs to `match_volunteers_to_event_enhanced()`
+- Ensure proper authentication and authorization for admin actions
+- Rate limit the new API endpoint to prevent abuse
 
 ### Related Files
-- `src/models/dbmodels.py` - Add `Location` model, update relationships
-- `src/models/pydanticmodels.py` - Add location schemas
-- `src/util/geocoding.py` - New file for geocoding utilities
-- `src/routers/location.py` - New router for location endpoints
-- `src/routers/event.py` - Update to use location objects
-- `src/routers/volunteer.py` - Update to use location objects
-- `src/dependencies/database/crud.py` - Add location CRUD operations
-- `src/dependencies/database/relations.py` - Update matching algorithm
-- Database migrations - Schema changes and data migration
-- `requirements.txt` - Add `httpx`, `geopy` or similar
-- `.env.example` - Add geocoding configuration
-
-### Third-Party Libraries to Add
-```
-httpx>=0.24.0              # Async HTTP client for API calls
-geopy>=2.3.0               # Optional: geocoding utilities
-python-dotenv>=1.0.0       # If not already included
-```
+- `src/dependencies/database/geospatial.py` - New spatial query functions
+- `src/dependencies/database/relations.py` - Updated matching function
+- `src/tests/database/test_geospatial.py` - New tests for geospatial queries
+- `src/tests/database/test_relations.py` - Updated tests for matching function

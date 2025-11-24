@@ -1,6 +1,6 @@
 from typing import Iterable
 from datetime import datetime
-from sqlalchemy import select, update
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels, pydanticmodels
@@ -8,12 +8,16 @@ from ...util import error
 
 
 def create_location(
-    location_obj: pydanticmodels.Location, latlong: tuple[float, float] | None = None
+    location_obj: pydanticmodels.Location,
+    latlong: tuple[float, float] | None = None,
 ):
     if latlong is None:
         raise error.ExternalServiceError(
             "DB", "create_location was called without latlong"
         )
+
+    latitude = latlong[0]
+    longitude = latlong[1]
 
     time = datetime.now()
 
@@ -23,8 +27,7 @@ def create_location(
         state=location_obj.state,
         country=location_obj.country,
         zip_code=location_obj.zip_code,
-        latitude=latlong[0],
-        longitude=latlong[1],
+        coordinates=func.ST_SetSRID(func.ST_MakePoint(longitude, latitude), 4326),
         created_at=time,
         updated_at=time,
     )
@@ -52,8 +55,11 @@ def update_location(
     old_location.zip_code = new_location.zip_code
 
     time = datetime.now()
-    old_location.latitude = latlong[0]
-    old_location.longitude = latlong[1]
+    latitude = latlong[0]
+    longitude = latlong[1]
+    old_location.coordinates = func.ST_SetSRID(
+        func.ST_MakePoint(longitude, latitude), 4326
+    )
     old_location.updated_at = time
 
 

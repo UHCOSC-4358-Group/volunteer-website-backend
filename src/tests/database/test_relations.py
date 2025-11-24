@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from datetime import date, time
 import pytest
 from src.models import pydanticmodels, dbmodels
+from src.dependencies.database.crud import create_location
 from src.dependencies.database import relations
 from src.tests.database.conftest import Factories
 from src.util import error
@@ -118,13 +119,25 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
     event_end_time = time(7, 30, 0)
 
     org = factories.organization()
+
+    event_location = create_location(
+        pydanticmodels.Location(
+            address="218 Produce Row",
+            city="San Antonio",
+            state="TX",
+            country="USA",
+            zip_code="78207",
+        ),
+        (29.424891, -98.499741),
+    )
     event = factories.event(
         org=org,
         day=event_date,
         start_time=event_start_time,
         end_time=event_end_time,
-        location="Houston",
+        location_id=event_location.id,
     )
+    event.location = event_location
     event.needed_skills.append(dbmodels.EventSkill(skill="Cleaning"))
     event.needed_skills.append(dbmodels.EventSkill(skill="Cooking"))
     admin = factories.admin(org_id=org.id)
@@ -132,7 +145,19 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
     # Create our volunteers to be matched against
 
     # Should match everything, score == 10
-    v0 = factories.volunteer(first_name="volunteer0", location="Houston")
+
+    vol0_location = create_location(
+        pydanticmodels.Location(
+            address="107 W Houston St",
+            city="San Antonio",
+            state="Texas",
+            country="USA",
+            zip_code="78205",
+        ),
+        (29.4273377, -98.5019135),
+    )
+
+    v0 = factories.volunteer(first_name="volunteer0")
     v0.times_available.append(
         dbmodels.VolunteerAvailableTime(
             day_of_week=pydanticmodels.DayOfWeek.THURSDAY,
@@ -140,11 +165,22 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
             end_time=time(7, 0, 0),
         )
     )
+    v0.location = vol0_location
     v0.skills.append(dbmodels.VolunteerSkill(skill="Cleaning"))
     v0.skills.append(dbmodels.VolunteerSkill(skill="Cooking"))
 
-    # Should match both schedule and location, score == 8
-    v1 = factories.volunteer(first_name="volunteer1", location="Houston")
+    vol1_location = create_location(
+        pydanticmodels.Location(
+            address="501 W Cesar E. Chavez Blvd",
+            city="San Antonio",
+            state="Texas",
+            country="USA",
+            zip_code="78207",
+        ),
+        (29.4253989, -98.5042628),
+    )
+    v1 = factories.volunteer(first_name="volunteer1")
+    v1.location = vol1_location
     v1.times_available.append(
         dbmodels.VolunteerAvailableTime(
             day_of_week=pydanticmodels.DayOfWeek.THURSDAY,
@@ -152,8 +188,20 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
             end_time=time(7, 0, 0),
         )
     )
+
+    vol2_location = create_location(
+        pydanticmodels.Location(
+            address="3903 N St Mary's",
+            city="San Antonio",
+            state="Texas",
+            country="USA",
+            zip_code="78212",
+        ),
+        (29.792816, -98.5205579),
+    )
     # Should only match time, score == 4
-    v2 = factories.volunteer(first_name="volunteer2", location="x")
+    v2 = factories.volunteer(first_name="volunteer2")
+    v2.location = vol2_location
     v2.times_available.append(
         dbmodels.VolunteerAvailableTime(
             day_of_week=pydanticmodels.DayOfWeek.THURSDAY,
@@ -162,7 +210,7 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
         )
     )
     # Shouldn't match anything, score == 0
-    v3 = factories.volunteer(first_name="volunteer3", location="x")
+    v3 = factories.volunteer(first_name="volunteer3")
     v3.times_available.append(
         dbmodels.VolunteerAvailableTime(
             day_of_week=pydanticmodels.DayOfWeek.THURSDAY,
@@ -173,17 +221,12 @@ def test_match_volunteers_to_event(db_session: Session, factories: Factories):
 
     db_session.commit()
 
-    results = relations.match_volunteers_to_event(db_session, event.id, admin.id)
-
-    for volunteer, score in results:
-        if volunteer.first_name == "volunteer0":
-            assert score == 10
-        if volunteer.first_name == "volunteer1":
-            assert score == 8
-        elif volunteer.first_name == "volunteer2":
-            assert score == 4
-        elif volunteer.first_name == "volunteer3":
-            assert score == 0
+    results = relations.match_volunteers_to_event(
+        db_session, event.id, admin.id, max_distance=10, distance_unit="mile"
+    )
+    assert len(results) == 2
+    assert results[0][0] == v0
+    assert results[1][0] == v1
 
 
 class Test_Event_Type_Helper:
@@ -195,7 +238,7 @@ class Test_Event_Type_Helper:
         date: date,
         start_time: time,
         end_time: time,
-        location: str,
+        location: dbmodels.Location,
         needed_skills: list[str],
     ) -> None:
         self.name = name
@@ -206,6 +249,11 @@ class Test_Event_Type_Helper:
         self.needed_skills = needed_skills
 
 
+generic_pydantic_model = pydanticmodels.Location(
+    address=".    ", city=".     ", state=".    ", zip_code=".    ", country=".     "
+)
+
+
 def test_match_events_to_volunteer(db_session: Session, factories: Factories):
     events: list[Test_Event_Type_Helper] = [
         # Should match everything
@@ -214,25 +262,28 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
             date(2025, 12, 4),  # Thursday
             time(4, 30, 0),
             time(6, 0, 0),
-            "Houston",
+            # < 2 miles
+            create_location(generic_pydantic_model, (29.8, -98.5)),
             ["Cooking", "Cleaning"],
         ),
-        # Shouldn't match skills
+        # Shouldn't match skills, ok location
         Test_Event_Type_Helper(
             "Handicap Assistance for Voting",
             date(2025, 12, 4),
             time(4, 30, 0),
             time(6, 0, 0),
-            "Houston",
+            # ~ 31 miles
+            create_location(generic_pydantic_model, (29.8, -98.0)),
             [],
         ),
-        # Shouldn't match skills and location
+        # Shouldn't match skills and poor location
         Test_Event_Type_Helper(
             "Community Assistance",
             date(2025, 12, 4),
             time(4, 30, 0),
             time(6, 0, 0),
-            "Dallas",
+            # ~ 47 miles
+            create_location(generic_pydantic_model, (30.3, -98.0)),
             [],
         ),
         # Shouldn't match anything, period
@@ -241,12 +292,14 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
             date(2025, 12, 4),
             time(17, 30, 0),
             time(20, 0, 0),
-            "Dallas",
+            # 88 miles away
+            create_location(generic_pydantic_model, (31.0, -99.0)),
             [],
         ),
     ]
 
     org = factories.organization()
+    db_events = []
     for event_object in events:
         new_event = factories.event(
             org=org,
@@ -254,15 +307,20 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
             day=event_object.date,
             start_time=event_object.start_time,
             end_time=event_object.end_time,
-            location=event_object.location,
         )
 
+        new_event.location = event_object.location
         for s in event_object.needed_skills:
             new_event.needed_skills.append(dbmodels.EventSkill(skill=s))
+        db_events.append(new_event)
 
     db_session.commit()
 
-    volunteer = factories.volunteer(location="Houston")
+    volunteer = factories.volunteer()
+
+    volunteer.location = create_location(
+        generic_pydantic_model, (29.792816, -98.5205579)
+    )
     volunteer.times_available.append(
         dbmodels.VolunteerAvailableTime(
             day_of_week=dbmodels.DayOfWeek.THURSDAY,
@@ -275,85 +333,86 @@ def test_match_events_to_volunteer(db_session: Session, factories: Factories):
 
     db_session.commit()
 
-    results = relations.match_events_to_volunteer(db_session, volunteer.id)
+    results = relations.match_events_to_volunteer(db_session, volunteer.id, 50.0)
 
-    for event, score in results:
-        if event.name == "Food Bank Help":
-            assert score == 10
-        if event.name == "Handicap Assistance for Voting":
-            assert score == 8
-        if event.name == "Community Assistance":
-            assert score == 4
-        if event.name == "Cookfest":
-            assert score == 0
+    assert len(results) == 3
+    assert results[0][0] == db_events[0]
+    assert results[1][0] == db_events[1]
+    assert results[2][0] == db_events[2]
 
 
 def test_get_volunteer_history(db_session: Session, factories: Factories):
-    events_obj: list[Test_Event_Type_Helper] = [
-        # Shouldn't match either
+    events: list[Test_Event_Type_Helper] = [
+        # Shouldn't match
         Test_Event_Type_Helper(
             "Food Bank Help",
-            date(2025, 12, 4),  # Thursday
-            time(11, 30, 0),
-            time(14, 0, 0),
-            "Houston",
-            [],
-        ),
-        # Same day, but should match due to time
-        Test_Event_Type_Helper(
-            "Handicap Assistance for Voting",
-            date(2025, 11, 4),
-            time(5, 30, 0),
-            time(6, 0, 0),
-            "Houston",
-            [],
-        ),
-        # November 4th, 4:30 - 6
-        Test_Event_Type_Helper(
-            "Community Assistance",
-            date(2025, 11, 4),
+            date(2050, 12, 4),
             time(4, 30, 0),
             time(6, 0, 0),
-            "Houston",
+            # < 2 miles
+            create_location(generic_pydantic_model, (29.8, -98.5)),
+            ["Cooking", "Cleaning"],
+        ),
+        # Shouldn't match
+        Test_Event_Type_Helper(
+            "Handicap Assistance for Voting",
+            date(2050, 12, 3),
+            time(4, 30, 0),
+            time(6, 0, 0),
+            # ~ 31 miles
+            create_location(generic_pydantic_model, (29.8, -98.0)),
             [],
         ),
-        # November 4th, 17:30 - 20
+        # Should match
+        Test_Event_Type_Helper(
+            "Community Assistance",
+            date(2022, 12, 5),
+            time(4, 30, 0),
+            time(6, 0, 0),
+            # ~ 47 miles
+            create_location(generic_pydantic_model, (30.3, -98.0)),
+            [],
+        ),
+        # Should match
         Test_Event_Type_Helper(
             "Cookfest",
-            date(2025, 11, 4),
+            date(2022, 12, 4),
             time(17, 30, 0),
             time(20, 0, 0),
-            "Houston",
+            # 88 miles away
+            create_location(generic_pydantic_model, (31.0, -99.0)),
             [],
         ),
     ]
 
-    events = []
+    new_events: list[dbmodels.Event] = []
 
     org = factories.organization()
-    for event_object in events_obj:
+    for event_object in events:
         new_event = factories.event(
             org=org,
             name=event_object.name,
             day=event_object.date,
             start_time=event_object.start_time,
             end_time=event_object.end_time,
-            location=event_object.location,
         )
 
+        new_event.location = event_object.location
         for s in event_object.needed_skills:
             new_event.needed_skills.append(dbmodels.EventSkill(skill=s))
 
-        events.append(new_event)
+        new_events.append(new_event)
 
     db_session.commit()
 
     volunteer = factories.volunteer()
-    for e in events:
+    for e in new_events:
         volunteer.events.append(dbmodels.EventVolunteer(event=e))
 
     db_session.commit()
 
     results = relations.get_volunteer_history(db_session, volunteer.id)
 
-    assert len(results) == 3
+    assert len(results) == 2
+    assert results[0][0] == new_events[2]
+    assert results[1][0] == new_events[3]

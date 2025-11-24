@@ -6,17 +6,19 @@ from sqlalchemy import (
     literal,
     desc,
     Row,
-    cast as sa_cast,
-    Date as sa_Date,
-    Time as sa_Time,
     or_,
 )
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels
 from ...util import error
-from ...models import pydanticmodels  # added
-from typing import cast, Sequence, Tuple
+from ...models import pydanticmodels
+from .scoring import (
+    skills_match_score,
+    schedule_overlap_score,
+    distance_based_location_score,
+)
+from typing import cast, Sequence, Tuple, Literal
 from datetime import date as Date, datetime, time as Time
 
 
@@ -111,142 +113,149 @@ def remove_volunteer_event(db: Session, volunteer_id: int, event_id: int):
         raise error.DatabaseOperationError("remove_volunteer_event", str(exc))
 
 
-def match_volunteers_to_event(db: Session, event_id: int, admin_id: int):
+def match_volunteers_to_event(
+    db: Session,
+    event_id: int,
+    admin_id: int,
+    max_distance: float = 25.0,
+    distance_unit: Literal["km", "mile"] = "mile",
+):
+    """
+    SQL-optimized version using SQLAlchemy expressions.
+    Better performance for large volunteer pools.
+    """
     found_admin = db.get(dbmodels.OrgAdmin, admin_id)
-
     if found_admin is None:
         raise error.NotFoundError("admin", admin_id)
 
     found_event = db.get(dbmodels.Event, event_id)
-
     if found_event is None:
         raise error.NotFoundError("event", event_id)
 
-    SKILLS_TOTAL_WEIGHT = 2
-    LOCATION_TOTAL_WEIGHT = 4
-    SCHEDULE_TOTAL_WEIGHT = 4
+    SKILLS_MAX = 2
+    LOCATION_MAX = 4
+    SCHEDULE_MAX = 4
 
-    # Count of matching skills per volunteer
-    skills_found_subquery = (
-        select(func.count())
-        .select_from(dbmodels.VolunteerSkill)
-        .where(dbmodels.VolunteerSkill.volunteer_id == dbmodels.Volunteer.id)
-        .where(
-            dbmodels.VolunteerSkill.skill.in_(
-                [s.skill for s in found_event.needed_skills]
-            )
+    # Build distance expression (PostGIS)
+    center_point = found_event.location.coordinates
+
+    distance_expr = func.ST_Distance(center_point, dbmodels.Location.coordinates)
+
+    # Convert to miles if needed
+    if distance_unit == "mile":
+        distance_expr = distance_expr * 0.000621371
+    else:
+        distance_expr = distance_expr / 1000
+
+    # Filter by radius
+    within_radius = func.ST_DWithin(
+        center_point,
+        dbmodels.Location.coordinates,
+        max_distance * (1609.34 if distance_unit == "mile" else 1000),
+    )
+
+    skills_score = skills_match_score(
+        dbmodels.Volunteer.id,
+        dbmodels.VolunteerSkill,
+        dbmodels.VolunteerSkill.volunteer_id,
+        [s.skill for s in found_event.needed_skills],
+        max_weight=SKILLS_MAX,
+    )
+
+    schedule_score = schedule_overlap_score(
+        dbmodels.Volunteer.id,
+        found_event.day,
+        found_event.start_time,
+        found_event.end_time,
+        max_weight=SCHEDULE_MAX,
+    )
+
+    location_score = distance_based_location_score(
+        distance_expr, max_distance, max_weight=LOCATION_MAX
+    )
+
+    total_score = (location_score + skills_score + schedule_score).label("total_score")
+
+    # Build query
+    query = (
+        select(
+            dbmodels.Volunteer,
+            total_score,
         )
-        .correlate(dbmodels.Volunteer)
-        .scalar_subquery()
+        .join(dbmodels.Location, dbmodels.Volunteer.location_id == dbmodels.Location.id)
+        .where(within_radius)
+        .order_by(desc(total_score))
     )
 
-    # Caps at SKILLS_TOTAL_WEIGHT
-    skills_weight_expr = case(
-        (skills_found_subquery > SKILLS_TOTAL_WEIGHT, SKILLS_TOTAL_WEIGHT),
-        else_=skills_found_subquery,
-    )
-
-    # Check if location is the same
-    location_match_expression = case(
-        (
-            func.coalesce(dbmodels.Volunteer.location, "")
-            == func.coalesce(literal(found_event.location), ""),
-            LOCATION_TOTAL_WEIGHT,
-        ),
-        else_=0,
-    )
-
-    # Now, let's check if the schedules overlap at all
-    event_day: Date = cast(Date, found_event.day)
-    target_day = pydanticmodels.DayOfWeek(event_day.isoweekday())
-
-    schedules_overlap = (
-        select(literal(True))
-        .select_from(dbmodels.VolunteerAvailableTime)
-        .where(
-            and_(
-                dbmodels.VolunteerAvailableTime.volunteer_id == dbmodels.Volunteer.id,
-                dbmodels.VolunteerAvailableTime.day_of_week == target_day,
-                dbmodels.VolunteerAvailableTime.start_time <= found_event.end_time,
-                dbmodels.VolunteerAvailableTime.end_time >= found_event.start_time,
-            )
-        )
-        .correlate(dbmodels.Volunteer)
-        .exists()
-    )
-
-    schedules_overlap_expression = case(
-        (schedules_overlap, SCHEDULE_TOTAL_WEIGHT), else_=0
-    )
-
-    score_expr = (
-        location_match_expression + skills_weight_expr + schedules_overlap_expression
-    ).label("matching_score")
-
-    query = select(dbmodels.Volunteer, score_expr).order_by(desc(score_expr))
-
-    results: Sequence[Row[Tuple[dbmodels.Volunteer, int]]] = db.execute(query).all()
+    results = db.execute(query).all()
 
     return results
 
 
 def match_events_to_volunteer(
-    db: Session, volunteer_id: int, TESTING_DAY: int | None = None
+    db: Session,
+    volunteer_id: int,
+    max_distance: float = 25.0,
+    distance_unit: Literal["km", "mile"] = "mile",
 ):
-
+    """
+    Find and rank events that match a volunteer's profile.
+    Uses same scoring system as match_volunteers_to_event for consistency.
+    """
     found_volunteer = db.get(dbmodels.Volunteer, volunteer_id)
 
     if found_volunteer is None:
         raise error.NotFoundError("volunteer", volunteer_id)
 
-    SKILLS_TOTAL_WEIGHT = 2
-    LOCATION_TOTAL_WEIGHT = 4
-    SCHEDULE_TOTAL_WEIGHT = 4
+    if found_volunteer.location is None:
+        raise error.ValidationError(
+            "Volunteer must have a location set to match events"
+        )
 
-    # Count of matching skills per event
-    skills_found_subquery = (
-        select(func.count())
-        .select_from(dbmodels.EventSkill)
-        .where(dbmodels.EventSkill.event_id == dbmodels.Event.id)
-        .where(dbmodels.EventSkill.skill.in_([s.skill for s in found_volunteer.skills]))
-        .correlate(dbmodels.Event)
-        .scalar_subquery()
+    SKILLS_MAX = 2
+    LOCATION_MAX = 4
+    SCHEDULE_MAX = 4
+
+    # Build distance expression (PostGIS)
+    volunteer_point = found_volunteer.location.coordinates
+
+    distance_expr = func.ST_Distance(volunteer_point, dbmodels.Location.coordinates)
+
+    # Convert to miles if needed
+    if distance_unit == "mile":
+        distance_expr = distance_expr * 0.000621371
+    else:
+        distance_expr = distance_expr / 1000
+
+    # Filter by radius
+    within_radius = func.ST_DWithin(
+        volunteer_point,
+        dbmodels.Location.coordinates,
+        max_distance * (1609.34 if distance_unit == "mile" else 1000),
     )
 
-    # Caps at SKILLS_TOTAL_WEIGHT
-    skills_weight_expr = case(
-        (skills_found_subquery > SKILLS_TOTAL_WEIGHT, SKILLS_TOTAL_WEIGHT),
-        else_=skills_found_subquery,
+    # Reuse scoring components
+    skills_score = skills_match_score(
+        dbmodels.Event.id,
+        dbmodels.EventSkill,
+        dbmodels.EventSkill.event_id,
+        [s.skill for s in found_volunteer.skills],
+        max_weight=SKILLS_MAX,
     )
 
-    # Check if location is the same (Event.location vs Volunteer.location)
-    location_match_expression = case(
-        (
-            func.coalesce(dbmodels.Event.location, "")
-            == func.coalesce(literal(found_volunteer.location), ""),
-            LOCATION_TOTAL_WEIGHT,
-        ),
-        else_=0,
-    )
+    # For schedule overlap, we need to check if the volunteer's availability
+    # overlaps with the event's day/time
+    day_expr = func.extract("isodow", dbmodels.Event.day)
+    day_of_week_type = dbmodels.VolunteerAvailableTime.day_of_week.type
+    day_expr_casted = func.cast(day_expr, day_of_week_type)
 
-    # For testing purposes in SQLite
-    day_expr = (
-        func.extract("isodow", dbmodels.Event.day)
-        if db.get_bind().dialect.name == "postgresql"
-        else pydanticmodels.DayOfWeek(4)
-    )
-
-    # Check if schedules overlap:
-    # For each Event row, we check whether this volunteer has any weekly slot
-    # on the same ISO day-of-week that overlaps the event's time window.
     schedules_overlap = (
         select(literal(True))
         .select_from(dbmodels.VolunteerAvailableTime)
         .where(
             and_(
                 dbmodels.VolunteerAvailableTime.volunteer_id == found_volunteer.id,
-                # isodow: Monday=1 .. Sunday=7, matches DayOfWeek enum values
-                dbmodels.VolunteerAvailableTime.day_of_week == day_expr,
+                dbmodels.VolunteerAvailableTime.day_of_week == day_expr_casted,
                 dbmodels.VolunteerAvailableTime.start_time <= dbmodels.Event.end_time,
                 dbmodels.VolunteerAvailableTime.end_time >= dbmodels.Event.start_time,
             )
@@ -255,16 +264,23 @@ def match_events_to_volunteer(
         .exists()
     )
 
-    schedules_overlap_expression = case(
-        (schedules_overlap, SCHEDULE_TOTAL_WEIGHT), else_=0
+    schedule_score = case((schedules_overlap, SCHEDULE_MAX), else_=0)
+
+    location_score = distance_based_location_score(
+        distance_expr, max_distance, max_weight=LOCATION_MAX
     )
 
-    score_expr = (
-        location_match_expression + skills_weight_expr + schedules_overlap_expression
-    ).label("matching_score")
+    total_score = (location_score + skills_score + schedule_score).label(
+        "matching_score"
+    )
 
-    # Rank Events for this volunteer by the computed score
-    query = select(dbmodels.Event, score_expr).order_by(desc(score_expr))
+    # Build query
+    query = (
+        select(dbmodels.Event, total_score)
+        .join(dbmodels.Location, dbmodels.Event.location_id == dbmodels.Location.id)
+        .where(within_radius)
+        .order_by(desc(total_score))
+    )
 
     results: Sequence[Row[Tuple[dbmodels.Event, int]]] = db.execute(query).all()
 
@@ -273,31 +289,16 @@ def match_events_to_volunteer(
 
 def get_volunteer_history(db: Session, volunteer_id: int):
     """
-    SELECT *
-    FROM event
-    JOIN event_volunteer ON event.id = event_volunteer.event_id
-    JOIN volunteer ON event_volunteer.volunteer_id = volunteer.id
-    WHERE event.date <= CURRENT_DATE AND event.end_time < CURRENT_TIME
-
-    E.g.:
-
-    stmt = select(user_table).join(
-        address_table, user_table.c.id == address_table.c.user_id
-    )
-
+    Get all past events that a volunteer participated in.
+    Uses PostgreSQL's CURRENT_DATE and CURRENT_TIME for server-side filtering.
+    Returns events ordered by most recent first.
     """
-
-    if db.get_bind().dialect.name != "postgresql":
-        current_date = Date(2025, 11, 5)
-        current_time = Time(12, 0, 0)
-    else:
-        current_date = Date.today()
-        current_time = datetime.now().time()
-
+    # Use PostgreSQL's server-side date/time functions
     past_event_predicate = or_(
-        dbmodels.Event.day < current_date,
+        dbmodels.Event.day < func.current_date(),
         and_(
-            dbmodels.Event.day == current_date, dbmodels.Event.end_time < current_time
+            dbmodels.Event.day == func.current_date(),
+            dbmodels.Event.end_time < func.current_time(),
         ),
     )
 
@@ -313,7 +314,7 @@ def get_volunteer_history(db: Session, volunteer_id: int):
         )
         .where(dbmodels.Volunteer.id == volunteer_id)
         .where(past_event_predicate)
-        .order_by(dbmodels.Event.day, dbmodels.Event.end_time)
+        .order_by(desc(dbmodels.Event.day), desc(dbmodels.Event.end_time))
     )
 
     volunteer_history = db.execute(query).all()

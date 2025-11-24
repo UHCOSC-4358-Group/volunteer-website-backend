@@ -9,7 +9,9 @@ from sqlalchemy import (
     Time,
     Date,
     DateTime,
+    func,
 )
+from geoalchemy2 import Geography
 from sqlalchemy.orm import declarative_base, relationship, Mapped, mapped_column
 from typing import List, Optional
 from .pydanticmodels import EventUrgency, DayOfWeek
@@ -29,8 +31,9 @@ class Location(Base):
     country: Mapped[str] = mapped_column(
         String(100), default="USA", server_default="USA", nullable=False
     )
-    latitude: Mapped[float] = mapped_column(Float, nullable=True)
-    longitude: Mapped[float] = mapped_column(Float, nullable=True)
+    coordinates: Mapped[str] = mapped_column(
+        Geography(geometry_type="POINT", srid=4326), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime,
         default=datetime.now(timezone.utc),
@@ -132,7 +135,9 @@ class VolunteerAvailableTime(Base):
     start_time: Mapped[Time] = mapped_column(Time, primary_key=True)
     end_time: Mapped[Time] = mapped_column(Time)
     day_of_week: Mapped[DayOfWeek] = mapped_column(
-        SAEnum(DayOfWeek, name="schedule_day_of_week"), primary_key=True, index=True
+        Integer,
+        primary_key=True,
+        index=True,
     )
 
     volunteer: Mapped["Volunteer"] = relationship(back_populates="times_available")

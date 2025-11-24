@@ -1,11 +1,16 @@
 import itertools
 import pytest
-from datetime import date, datetime, time
-from sqlalchemy import create_engine, event
+import time
+import psycopg2
+import os
+from datetime import date, datetime, time as Time
+from sqlalchemy import create_engine, event, func, text
 from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import StaticPool
 from typing import Any, Protocol
 from src.models import dbmodels
+
+
+POSTGIS_URL = "postgresql+psycopg2://test:test@localhost:5434/test"
 
 
 class Factories(Protocol):
@@ -15,45 +20,104 @@ class Factories(Protocol):
     def event(self, **overrides: Any) -> dbmodels.Event: ...
 
 
-engine = create_engine(
-    "sqlite+pysqlite:///:memory:",
-    future=True,
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
+# Configure pytest-docker to find docker-compose.yml
+@pytest.fixture(scope="session")
+def docker_compose_file(pytestconfig):
+    """Tell pytest-docker where to find docker-compose.yml"""
+    return os.path.join(str(pytestconfig.rootdir), "src/tests/docker-compose.yml")
 
 
-@event.listens_for(engine, "connect")
-def _set_sqlite_pragma(dbapi_connection, connection_record):
-    cursor = dbapi_connection.cursor()
-    cursor.execute("PRAGMA foreign_keys=ON")
-    cursor.close()
+def is_postgres_responsive(url):
+    """Check if PostgreSQL is accepting connections."""
+    try:
+        connection_string = url.replace("postgresql+psycopg2://", "postgresql://")
+        conn = psycopg2.connect(connection_string)
+        conn.close()
+        return True
+    except psycopg2.Error:
+        return False
 
 
-with engine.begin() as conn:
-    dbmodels.Base.metadata.create_all(bind=conn)
+@pytest.fixture(scope="session")
+def pg_engine(docker_services, docker_ip):
+    """
+    Session-scoped PostgreSQL engine using Docker.
 
+    Spins up a PostGIS-enabled PostgreSQL container using pytest-docker.
+    Ensures the database is reachable and PostGIS extension is created.
+    """
+    # Wait for PostgreSQL to become responsive
+    # This implicitly starts the container defined in docker-compose.yml
+    docker_services.wait_until_responsive(
+        timeout=30.0, pause=0.5, check=lambda: is_postgres_responsive(POSTGIS_URL)
+    )
 
-SessionLocal = sessionmaker(
-    bind=engine, autoflush=False, autocommit=False, expire_on_commit=False, future=True
-)
+    # Create SQLAlchemy engine with GeoAlchemy2 support
+    engine = create_engine(
+        POSTGIS_URL,
+        future=True,
+        echo=False,  # Set to True for SQL debugging
+        plugins=["geoalchemy2"],  # Enable GeoAlchemy2 dialect
+    )
+
+    # Ensure PostGIS extension exists and create schema
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis;"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis_topology;"))
+
+        # Create all tables
+        dbmodels.Base.metadata.create_all(bind=conn)
+
+    yield engine
+
+    # Cleanup: drop all tables and dispose engine
+    with engine.begin() as conn:
+        dbmodels.Base.metadata.drop_all(bind=conn)
+    engine.dispose()
 
 
 @pytest.fixture
-def db_session():
-    connection = engine.connect()
+def db_session(pg_engine):
+    """
+    Function-scoped session with automatic rollback.
+
+    Uses nested transactions (SAVEPOINTs) to ensure complete isolation
+    between tests. Each test gets a clean database state, and changes
+    are rolled back after the test completes.
+    """
+    # Create a connection that persists for the test
+    connection = pg_engine.connect()
+
+    # Begin an outer transaction
     outer = connection.begin()
-    session = SessionLocal(bind=connection)
+
+    # Create session bound to this connection
+    SessionLocal = sessionmaker(
+        bind=connection,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+        future=True,
+    )
+    session = SessionLocal()
+
+    # Begin a nested transaction (SAVEPOINT)
     nested = connection.begin_nested()
 
     @event.listens_for(session, "after_transaction_end")
     def _restart_savepoint(sess, trans):
+        """
+        Automatically restart the SAVEPOINT after each commit/rollback
+        within the test. This ensures that test code can use db_session.commit()
+        naturally, while we still roll back everything at the end.
+        """
         if not connection.in_nested_transaction():
             connection.begin_nested()
 
     try:
         yield session
     finally:
+        # Cleanup: close session, rollback outer transaction, close connection
         session.close()
         outer.rollback()
         connection.close()
@@ -61,6 +125,13 @@ def db_session():
 
 @pytest.fixture
 def factories(db_session: Session) -> Factories:
+    """
+    Factory fixture for creating test data.
+
+    Provides factory methods for creating Volunteers, OrgAdmins,
+    Organizations, and Events with sensible defaults and the ability
+    to override any field.
+    """
     counter = itertools.count(1)
 
     def _volunteer_defaults(n: int) -> dict[str, Any]:
@@ -103,8 +174,8 @@ def factories(db_session: Session) -> Factories:
             "capacity": 5,
             "assigned": 0,
             "day": date(2025, 12, 4),
-            "start_time": time(4, 30, 0),
-            "end_time": time(7, 30, 0),
+            "start_time": Time(4, 30, 0),
+            "end_time": Time(7, 30, 0),
         }
 
     class F:
@@ -120,14 +191,17 @@ def factories(db_session: Session) -> Factories:
                     state="Texas",
                     country="USA",
                     zip_code="78701",
-                    latitude=30.276513,
-                    longitude=-97.739758,
+                    # Use PostGIS POINT - note: (longitude, latitude) order!
+                    coordinates=func.ST_SetSRID(
+                        func.ST_MakePoint(-97.739758, 30.276513), 4326
+                    ),
                     created_at=datetime.now(),
                     updated_at=datetime.now(),
                 )
                 db_session.add(location)
                 db_session.flush()
                 data["location_id"] = location.id
+
             v = dbmodels.Volunteer(**data)
             db_session.add(v)
             db_session.commit()
@@ -153,14 +227,17 @@ def factories(db_session: Session) -> Factories:
                     state="Texas",
                     country="USA",
                     zip_code="78701",
-                    latitude=30.276513,
-                    longitude=-97.739758,
+                    # Use PostGIS POINT
+                    coordinates=func.ST_SetSRID(
+                        func.ST_MakePoint(-97.739758, 30.276513), 4326
+                    ),
                     created_at=datetime.now(),
                     updated_at=datetime.now(),
                 )
                 db_session.add(location)
                 db_session.flush()
                 data["location_id"] = location.id
+
             org = dbmodels.Organization(**data)
             db_session.add(org)
             db_session.commit()
@@ -178,8 +255,10 @@ def factories(db_session: Session) -> Factories:
                     state="Texas",
                     country="USA",
                     zip_code="78701",
-                    latitude=30.276513,
-                    longitude=-97.739758,
+                    # Use PostGIS POINT
+                    coordinates=func.ST_SetSRID(
+                        func.ST_MakePoint(-97.739758, 30.276513), 4326
+                    ),
                     created_at=datetime.now(),
                     updated_at=datetime.now(),
                 )

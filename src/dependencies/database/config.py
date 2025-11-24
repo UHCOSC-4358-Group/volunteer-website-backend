@@ -21,9 +21,9 @@ import os
 
 def build_sessionmaker(db_url: str, use_pooler: bool = False):
     if use_pooler:
-        engine = create_engine(db_url, poolclass=NullPool)
+        engine = create_engine(db_url, poolclass=NullPool, plugins=["geoalchemy2"])
     else:
-        engine = create_engine(db_url, pool_pre_ping=True)
+        engine = create_engine(db_url, pool_pre_ping=True, plugins=["geoalchemy2"])
     SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
     return engine, SessionLocal
 
