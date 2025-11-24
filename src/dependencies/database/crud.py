@@ -109,7 +109,7 @@ def create_volunteer(
         db.rollback()
         raise error.DatabaseOperationError("create_volunteer", str(exc))
     db.refresh(vol)
-    del vol.password
+    # del vol.password
     return vol
 
 
@@ -138,7 +138,7 @@ def create_org_admin(
         db.rollback()
         raise error.DatabaseOperationError("create_org_admin", str(exc))
     db.refresh(admin)
-    del admin.password
+    # del admin.password
     return admin
 
 
@@ -162,18 +162,12 @@ def get_current_volunteer(db: Session, id: int):
 
     current_volunteer = db.get(dbmodels.Volunteer, id)
 
-    if current_volunteer is not None:
-        del current_volunteer.password
-
     return current_volunteer
 
 
 def get_current_admin(db: Session, id: int):
 
     current_admin = db.get(dbmodels.OrgAdmin, id)
-
-    if current_admin is not None:
-        del current_admin.password
 
     return current_admin
 
@@ -458,3 +452,22 @@ def delete_org_event(db: Session, event_id: int, admin_id: int):
     except IntegrityError as exc:
         db.rollback()
         raise error.DatabaseOperationError("delete_org_event", str(exc))
+
+
+def get_upcoming_events_by_org(db: Session, org_id: int):
+    """
+    Get all upcoming events for an organization.
+    Returns events where the day is today or in the future, ordered by day and start_time.
+    """
+    today = datetime.now().date()
+
+    query = (
+        select(dbmodels.Event)
+        .where(dbmodels.Event.org_id == org_id)
+        .where(dbmodels.Event.day >= today)
+        .order_by(dbmodels.Event.day, dbmodels.Event.start_time)
+    )
+
+    upcoming_events = db.execute(query).scalars().all()
+
+    return upcoming_events

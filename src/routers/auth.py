@@ -83,7 +83,7 @@ async def volunteer_login(
     if not verify_password(login_data.password, found_volunteer.password):
         raise error.AuthenticationError("User or password incorrect")
 
-    del found_volunteer.password
+    # del found_volunteer.password
 
     sign_JWT_volunteer(found_volunteer.id, response)
 
@@ -123,7 +123,7 @@ async def admin_login(
         raise error.AuthenticationError("User or password incorrect")
 
     # Delete password so it isn't passed along
-    del found_admin.password
+    # del found_admin.password
 
     sign_JWT_admin(found_admin.id, response)
 

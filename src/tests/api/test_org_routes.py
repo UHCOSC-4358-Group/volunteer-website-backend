@@ -135,3 +135,81 @@ def test_delete_org_from_id(
     resp = client.delete(f"/org/{org.id}")
 
     assert resp.status_code == 403
+
+
+def test_get_admin_profile(
+    client: TestClient,
+    db_session: Session,
+    factories: Factories,
+    as_admin,
+    as_volunteer,
+):
+    # Test 1: Admin with organization and events
+    org = factories.organization()
+    admin = factories.admin(org_id=org.id)
+
+    # Create some upcoming events
+    event1 = factories.event(org_id=org.id, name="Future Event 1")
+    event2 = factories.event(org_id=org.id, name="Future Event 2")
+
+    db_session.commit()
+
+    as_admin(admin.id)
+
+    resp = client.get(f"/org/admin/{admin.id}")
+
+    assert resp.status_code == 200
+
+    response_body = json.loads(resp.content)
+
+    assert response_body["admin"]["id"] == admin.id
+    assert response_body["admin"]["email"] == admin.email
+    assert response_body["organization"] is not None
+    assert response_body["organization"]["id"] == org.id
+    assert response_body["organization"]["name"] == org.name
+    assert len(response_body["upcoming_events"]) >= 2
+
+    # Test 2: Admin without organization
+    admin_no_org = factories.admin()
+    db_session.commit()
+
+    as_admin(admin_no_org.id)
+
+    resp = client.get(f"/org/admin/{admin_no_org.id}")
+
+    assert resp.status_code == 200
+
+    response_body = json.loads(resp.content)
+
+    assert response_body["admin"]["id"] == admin_no_org.id
+    assert response_body["organization"] is None
+    assert response_body["upcoming_events"] == []
+
+    # Test 3: Admin trying to access another admin's profile
+    another_admin = factories.admin()
+    db_session.commit()
+
+    as_admin(admin.id)
+
+    resp = client.get(f"/org/admin/{another_admin.id}")
+
+    assert resp.status_code == 403
+
+    # Test 4: Volunteer trying to access admin profile
+    volunteer = factories.volunteer()
+    db_session.commit()
+
+    as_volunteer(volunteer.id)
+
+    resp = client.get(f"/org/admin/{admin.id}")
+
+    assert resp.status_code == 403
+
+    # Test 5: Non-existent admin
+    FAKE_ADMIN_ID = -999
+
+    as_admin(admin.id)
+
+    resp = client.get(f"/org/admin/{FAKE_ADMIN_ID}")
+
+    assert resp.status_code == 403  # Fails authorization before checking existence

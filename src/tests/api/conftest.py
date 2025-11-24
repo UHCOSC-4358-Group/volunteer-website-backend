@@ -12,7 +12,6 @@ from src.main import app as fastapi_app
 from src.dependencies.database.config import get_db
 from src.dependencies.aws import get_s3
 from src.dependencies.auth import get_current_user, UserTokenInfo
-from src.dependencies.aws import create_bucket
 import time
 
 
