@@ -50,7 +50,7 @@ def test_create_org(
 
     resp = client.post(
         f"/org/create",
-        data={"org_str": json_str},
+        data={"org_data": json_str},
         files={"image": ("profile.png", fake_image, "image/png")},
     )
 
@@ -72,7 +72,7 @@ def test_create_org(
 
     resp = client.post(
         f"/org/create",
-        data={"org_str": json_str},
+        data={"org_data": json_str},
         files={"image": ("profile.png", fake_image, "image/png")},
     )
 
@@ -93,17 +93,19 @@ def test_update_org_from_id(
     as_admin(admin.id)
 
     org_updates = pydanticmodels.OrgUpdate(
-        name=UPDATED_NAME, description=None, location=None, image_url=None
+        name=UPDATED_NAME, description=None, location=None
     ).model_dump()
 
-    resp = client.patch(f"/org/{org.id}", json=org_updates)
+    json_str = json.dumps(org_updates)
+
+    resp = client.patch(f"/org/{org.id}", data={"org_updates_data": json_str})
     response_body = json.loads(resp.content)
     assert resp.status_code == 200
     assert response_body["name"] == UPDATED_NAME
 
     as_volunteer(admin.id)
 
-    resp = client.patch(f"/org/{org.id}", json=org_updates)
+    resp = client.patch(f"/org/{org.id}", data={"org_updates_data": json_str})
 
     assert resp.status_code == 403
 

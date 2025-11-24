@@ -29,7 +29,7 @@ def test_volunteer_signup(client: TestClient, db_session: Session, aws_s3: S3Cli
 
     resp = client.post(
         f"/auth/vol/signup",
-        data={"vol_str": json_str},
+        data={"vol_data": json_str},
         files={"image": ("profile.png", fake_image, "image/png")},
     )
 
@@ -101,7 +101,7 @@ def test_admin_signup(client: TestClient, db_session: Session, aws_s3: S3Client)
 
     resp = client.post(
         f"/auth/org/signup",
-        data={"admin_str": json_str},
+        data={"admin_data": json_str},
         files={"image": ("profile.png", fake_image, "image/png")},
     )
 

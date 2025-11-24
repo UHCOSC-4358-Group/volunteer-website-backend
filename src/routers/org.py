@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, UploadFile, File, Body
+from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from mypy_boto3_s3 import S3Client
 from ..models.pydanticmodels import OrgCreate, OrgUpdate
@@ -32,12 +32,13 @@ async def get_org_details(org_id: int, db: Session = Depends(get_db)):
 # Also, must attach org admin id to user
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_org(
-    org: OrgCreate = Body(...),
+    org_data: str = Form(...),
     image: UploadFile = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
+    org = OrgCreate.model_validate_json(org_data)
 
     if not is_admin(user_info):
         raise error.AuthorizationError("User is not an admin")
@@ -60,12 +61,14 @@ async def create_org(
 @router.patch("/{org_id}")
 async def update_org_from_id(
     org_id: int,
-    org_updates: OrgUpdate,
+    org_updates_data: str = Form(...),
     image: UploadFile | None = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
+    org_updates = OrgUpdate.model_validate_json(org_updates_data)
+
     if not is_admin(user_info):
         raise error.AuthorizationError("User is not an admin")
 

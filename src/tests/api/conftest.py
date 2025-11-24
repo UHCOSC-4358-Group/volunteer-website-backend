@@ -13,6 +13,7 @@ from src.dependencies.database.config import get_db
 from src.dependencies.aws import get_s3
 from src.dependencies.auth import get_current_user, UserTokenInfo
 from src.dependencies.aws import create_bucket
+import time
 
 
 @asynccontextmanager
@@ -74,3 +75,11 @@ def as_volunteer(app: FastAPI):
 
     yield _apply
     app.dependency_overrides.pop(get_current_user, None)
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_call(item):
+    # Run the actual test
+    outcome = yield
+    # Wait 1 second after each test
+    time.sleep(1)

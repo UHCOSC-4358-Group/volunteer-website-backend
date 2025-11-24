@@ -4,7 +4,7 @@ from fastapi import (
     Depends,
     status,
     File,
-    Body,
+    Form,
     UploadFile,
 )
 from pydantic import BaseModel, EmailStr
@@ -40,15 +40,18 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 @router.post("/vol/signup", status_code=status.HTTP_201_CREATED)
 async def volunteer_signup(
     response: Response,
-    vol: VolunteerCreate = Body(...),
+    vol_data: str = Form(),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
+    vol = VolunteerCreate.model_validate_json(vol_data)
+
     latlong: tuple[float, float] | None = None
 
     if vol.location is not None:
         latlong = get_coordinates(vol.location)
+        print(latlong[0], latlong[1])
 
     image_url: str | None = None
     if image is not None:
@@ -90,11 +93,12 @@ async def volunteer_login(
 @router.post("/org/signup", status_code=status.HTTP_201_CREATED)
 async def admin_signup(
     response: Response,
-    admin: AdminCreate = Body(...),
+    admin_data: str = Form(...),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
+    admin = AdminCreate.model_validate_json(admin_data)
     image_url: str | None = None
     if image is not None:
         image_url = upload_image(s3, image)

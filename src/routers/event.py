@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Body, File, UploadFile
+from fastapi import APIRouter, Depends, status, Body, File, Form, UploadFile
 from sqlalchemy.orm import Session
 from mypy_boto3_s3 import S3Client
 from ..models import dbmodels
@@ -37,12 +37,13 @@ async def get_event(event_id: int, db: Session = Depends(get_db)):
 # CRITERIA: MUST BE AUTHED, AND MUST BE AN ADMIN
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 async def create_event(
-    event: EventCreate = Body(...),
+    event_data: str = Form(...),
     image: UploadFile | None = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
+    event = EventCreate.model_validate_json(event_data)
     # User_id must be an admin, and must be in that org
     if not is_admin(user_info):
         raise error.AuthorizationError("User is not an admin")
@@ -66,12 +67,14 @@ async def create_event(
 @router.patch("/{event_id}")
 async def update_event(
     event_id: int,
-    event_updates: EventUpdate = Body(...),
+    event_updates_data: str = Form(...),
     image: UploadFile | None = File(default=None),
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
     s3: S3Client = Depends(get_s3),
 ):
+
+    event_updates = EventUpdate.model_validate_json(event_updates_data)
     if not is_admin(user_info):
         raise error.AuthorizationError("User is not an admin")
 

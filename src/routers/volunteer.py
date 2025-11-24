@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
 
 from ..dependencies.database.config import get_db
-from ..dependencies.auth import get_current_user, is_volunteer, UserTokenInfo
+from ..dependencies.auth import get_current_user, is_admin, UserTokenInfo
 from ..dependencies.database.relations import (
     match_events_to_volunteer,
     get_volunteer_history,
@@ -28,7 +28,7 @@ def volunteer_event_matches(
     - Admin may view any volunteer's matches.
     """
     # authorize
-    if user.user_id != volunteer_id or not is_volunteer(user):
+    if user.user_id != volunteer_id or not is_admin(user):
         raise error.AuthorizationError("Current user does not have same id as request")
 
     # compute matches

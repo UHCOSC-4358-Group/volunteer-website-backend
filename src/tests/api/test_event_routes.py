@@ -5,6 +5,7 @@ from src.models import pydanticmodels, dbmodels
 from src.tests.factories.pydantic_factories import event as event_factory
 from src.tests.database.conftest import Factories  # from tests/database/conftest.py
 from src.dependencies.database import relations
+from io import BytesIO
 
 
 def test_get_event(client: TestClient, factories: Factories):
@@ -47,7 +48,17 @@ def test_create_event_admin(
     payload = event_factory.dict(
         name=NAME, org_id=org.id, needed_skills=["Cooking", "Cleaning"]
     )
-    resp = client.post("/events/create", json=payload)
+
+    json_str = json.dumps(payload)
+
+    fake_image = BytesIO(b"fake image bytes")
+    fake_image.name = "profile.png"
+
+    resp = client.post(
+        "/events/create",
+        data={"event_data": json_str},
+        files={"image": ("profile.png", fake_image, "image/png")},
+    )
     response_body = json.loads(resp.content)
     assert resp.status_code == 201
     assert response_body["name"] == NAME
@@ -55,7 +66,11 @@ def test_create_event_admin(
     # Check volunteer checking
     as_volunteer(admin.id)
 
-    resp = client.post("/events/create", json=payload)
+    resp = client.post(
+        "/events/create",
+        data={"event_data": json_str},
+        files={"image": ("profile.png", fake_image, "image/png")},
+    )
     assert resp.status_code == 403
 
 
@@ -81,12 +96,14 @@ def test_update_event(
         name=UPDATED_NAME,
         description=None,
         location=None,
-        required_skills=None,
+        needed_skills=None,
         urgency=None,
         capacity=None,
     ).model_dump()
 
-    resp = client.patch(f"/events/{event.id}", json=payload)
+    json_str = json.dumps(payload)
+
+    resp = client.patch(f"/events/{event.id}", data={"event_updates_data": json_str})
     response_body = json.loads(resp.content)
     assert resp.status_code == 200
     assert response_body["name"] == UPDATED_NAME
@@ -95,7 +112,7 @@ def test_update_event(
     # Check volunteer checking
     as_volunteer(admin.id)
 
-    resp = client.patch(f"/events/{event.id}", json=payload)
+    resp = client.patch(f"/events/{event.id}", data={"event_updates_data": json_str})
     assert resp.status_code == 403
 
 
