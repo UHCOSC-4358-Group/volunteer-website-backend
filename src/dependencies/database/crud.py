@@ -70,6 +70,17 @@ def create_volunteer(
     image_url: str | None = None,
     latlong: tuple[float, float] | None = None,
 ):
+    # check for exisitng email
+    query = select(dbmodels.Volunteer).where(
+        dbmodels.Volunteer.email == new_volunteer.email
+    )
+
+    existing_vol = db.execute(query).scalar_one_or_none()
+
+    if existing_vol is not None:
+        raise error.ConflictError(
+            f"Volunteer with email '{new_volunteer.email}' already exists!"
+        )
 
     vol = dbmodels.Volunteer(
         email=new_volunteer.email,
@@ -120,6 +131,16 @@ def create_org_admin(
     new_admin: pydanticmodels.AdminCreate,
     image_url: str | None = None,
 ):
+
+    # check for exisitng email
+    query = select(dbmodels.Volunteer).where(dbmodels.OrgAdmin.email == new_admin.email)
+
+    existing_admin = db.execute(query).scalar_one_or_none()
+
+    if existing_admin is not None:
+        raise error.ConflictError(
+            f"Admin with email '{new_admin.email}' already exists!"
+        )
 
     admin = dbmodels.OrgAdmin(
         email=new_admin.email,
