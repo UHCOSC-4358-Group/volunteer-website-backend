@@ -18,7 +18,7 @@ from .scoring import (
     schedule_overlap_score,
     distance_based_location_score,
 )
-from typing import cast, Sequence, Tuple, Literal
+from typing import cast, Sequence, Tuple, Literal, List, Dict, Any
 from datetime import date as Date, datetime, time as Time
 
 
@@ -287,13 +287,12 @@ def match_events_to_volunteer(
     return results
 
 
-def get_volunteer_history(db: Session, volunteer_id: int):
+def get_volunteer_history(db: Session, volunteer_id: int) -> List[Dict[str, Any]]:
     """
-    Get all past events that a volunteer participated in.
+    Get all past events that a volunteer participated in, as plain dictionaries.
     Uses PostgreSQL's CURRENT_DATE and CURRENT_TIME for server-side filtering.
     Returns events ordered by most recent first.
     """
-    # Use PostgreSQL's server-side date/time functions
     past_event_predicate = or_(
         dbmodels.Event.day < func.current_date(),
         and_(
@@ -317,6 +316,31 @@ def get_volunteer_history(db: Session, volunteer_id: int):
         .order_by(desc(dbmodels.Event.day), desc(dbmodels.Event.end_time))
     )
 
-    volunteer_history = db.execute(query).all()
+    # returns Row objects with a single Event; get the scalar Event instances
+    events = db.execute(query).scalars().all()
 
-    return volunteer_history
+    past_events: List[Dict[str, Any]] = []
+    for event in events:
+        location: Dict[str, Any] = {}
+        if event.location is not None:
+            location = {
+                "address": event.location.address,
+                "city": event.location.city,
+                "state": event.location.state,
+                "country": event.location.country,
+                "zip_code": event.location.zip_code,
+            }
+
+        past_events.append(
+            {
+                "event_id": event.id,
+                "name": event.name,
+                "location": location,
+                "day": str(event.day) if event.day else None,
+                "start_time": (str(event.start_time) if event.start_time else None),
+                "end_time": str(event.end_time) if event.end_time else None,
+                "urgency": str(event.urgency) if event.urgency is not None else None,
+            }
+        )
+
+    return past_events

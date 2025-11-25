@@ -1,5 +1,5 @@
-from typing import Iterable
-from datetime import datetime
+from typing import Iterable, List, Dict, Any
+from datetime import datetime, date
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -471,3 +471,63 @@ def get_upcoming_events_by_org(db: Session, org_id: int):
     upcoming_events = db.execute(query).scalars().all()
 
     return upcoming_events
+
+
+def get_volunteer_upcoming_events(
+    db: Session, volunteer_id: int
+) -> List[Dict[str, Any]]:
+    """
+    Get all upcoming events for a volunteer (today or future dates).
+    Returns list of event dictionaries.
+    """
+
+    today = date.today()
+    upcoming_assignments = (
+        db.query(dbmodels.EventVolunteer, dbmodels.Event)
+        .join(dbmodels.Event, dbmodels.EventVolunteer.event_id == dbmodels.Event.id)
+        .filter(
+            dbmodels.EventVolunteer.volunteer_id == volunteer_id,
+            dbmodels.Event.day >= today,
+        )
+        .order_by(dbmodels.Event.day.asc(), dbmodels.Event.start_time.asc())
+        .all()
+    )
+
+    upcoming_events: List[Dict[str, Any]] = []
+    # each item is already (EventVolunteer, Event)
+    for assignment, event in upcoming_assignments:
+        location_dict: dict[str, str] = {}
+        if event.location is not None:
+            location_dict["address"] = event.location.address
+            location_dict["city"] = event.location.city
+            location_dict["state"] = event.location.state
+            location_dict["country"] = event.location.country
+            location_dict["zip_code"] = event.location.zip_code
+
+        upcoming_events.append(
+            {
+                "event_id": event.id,
+                "name": event.name,
+                "location": location_dict,
+                "day": str(event.day) if event.day else None,
+                "start_time": str(event.start_time) if event.start_time else None,
+                "end_time": str(event.end_time) if event.end_time else None,
+                "urgency": str(event.urgency),
+            }
+        )
+
+    return upcoming_events
+
+
+def get_volunteer_profile_data(volunteer: dbmodels.Volunteer) -> Dict[str, Any]:
+    """
+    Transform volunteer model instance into profile dictionary.
+    """
+    return {
+        "id": volunteer.id,
+        "email": volunteer.email,
+        "first_name": volunteer.first_name,
+        "last_name": volunteer.last_name,
+        "skills": [s.skill for s in (volunteer.skills or [])],
+        "availability": [str(a.day_of_week) for a in (volunteer.times_available or [])],
+    }

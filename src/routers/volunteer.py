@@ -2,7 +2,11 @@
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session
-
+from ..dependencies.database.crud import (
+    get_current_volunteer,
+    get_volunteer_upcoming_events,
+    get_volunteer_profile_data,
+)
 from ..dependencies.database.config import get_db
 from ..dependencies.auth import get_current_user, is_admin, UserTokenInfo
 from ..dependencies.database.relations import (
@@ -12,6 +16,40 @@ from ..dependencies.database.relations import (
 from ..util import error
 
 router = APIRouter(prefix="/vol", tags=["volunteer"])
+
+
+@router.get("/{volunteer_id}")
+def volunteer_information(
+    volunteer_id: int = Path(..., ge=1),
+    db: Session = Depends(get_db),
+    user: UserTokenInfo = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """
+    Get detailed information about a volunteer.
+    - Volunteer may view their own information.
+    - Admin may view any volunteer's information.
+    """
+    # authorize
+    if user.user_id != volunteer_id and not is_admin(user):
+        raise error.AuthorizationError(
+            "Current user does not have permission to view this volunteer"
+        )
+
+    volunteer = get_current_volunteer(db, volunteer_id)
+
+    if not volunteer:
+        raise HTTPException(status_code=404, detail="Volunteer not found")
+
+    # get data from crud layer
+    volunteer_data = get_volunteer_profile_data(volunteer)
+    upcoming_events = get_volunteer_upcoming_events(db, volunteer_id)
+    past_events = get_volunteer_history(db, volunteer_id)
+
+    return {
+        "volunteer": volunteer_data,
+        "upcoming_events": upcoming_events,
+        "past_events": past_events,
+    }
 
 
 @router.get("/{volunteer_id}/match")
