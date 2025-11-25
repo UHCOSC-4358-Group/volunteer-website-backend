@@ -128,6 +128,56 @@ async def delete_org_from_id(
 
     return {"message": f"Event successfully deleted!"}
 
+@router.get("/events")
+async def get_admin_org_events(
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Return upcoming events for the authenticated admin's organization.
+    """
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
+
+    admin = get_current_admin(db, user_info.user_id)
+    if admin is None:
+        raise error.NotFoundError("admin", user_info.user_id)
+
+    if admin.org_id is None:
+        return []
+
+    events = get_upcoming_events_by_org(db, admin.org_id)
+
+    def serialize_event(event):
+        location = None
+        if getattr(event, "location", None) is not None:
+            location = {
+                "address": event.location.address,
+                "city": event.location.city,
+                "state": event.location.state,
+                "zip_code": event.location.zip_code,
+                "country": event.location.country,
+            }
+
+        return {
+            "id": event.id,
+            "name": event.name,
+            "description": event.description,
+            "day": event.day.isoformat() if event.day else None,
+            "start_time": event.start_time.isoformat() if event.start_time else None,
+            "end_time": event.end_time.isoformat() if event.end_time else None,
+            "urgency": event.urgency.value if hasattr(event.urgency, "value") else str(event.urgency),
+            "capacity": event.capacity,
+            "assigned": event.assigned,
+            "org_id": event.org_id,
+            "location": location,
+            "needed_skills": [skill.skill for skill in event.needed_skills]
+            if getattr(event, "needed_skills", None)
+            else [],
+        }
+
+    return [serialize_event(evt) for evt in events]
+
 
 @router.get("/admin/{admin_id}")
 async def get_admin_profile(
