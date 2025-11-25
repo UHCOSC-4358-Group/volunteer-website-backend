@@ -19,6 +19,7 @@ from ..dependencies.database.crud import (
 )
 from ..dependencies.geocoding import get_coordinates
 from ..util import error
+from ..dependencies.database.relations import signup_org_admin
 
 router = APIRouter(prefix="/org", tags=["org"])
 
@@ -216,4 +217,26 @@ async def get_admin_profile(
         "admin": found_admin,
         "organization": org_data,
         "upcoming_events": upcoming_events,
+    }
+
+
+@router.post("/{org_id}/signup", status_code=status.HTTP_201_CREATED)
+def signup_current_admin_to_org(
+    org_id: int,
+    db: Session = Depends(get_db),
+    user_info: UserTokenInfo = Depends(get_current_user),
+):
+    # require admin role
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
+
+    admin_id = user_info.user_id
+
+    # signup_org_admin will validate existence/relationship and commit
+    signup_org_admin(db, org_id, admin_id)
+
+    return {
+        "message": "Admin signed up to organization",
+        "org_id": org_id,
+        "admin_id": admin_id,
     }
