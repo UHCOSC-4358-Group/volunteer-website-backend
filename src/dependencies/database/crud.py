@@ -523,11 +523,28 @@ def get_volunteer_profile_data(volunteer: dbmodels.Volunteer) -> Dict[str, Any]:
     """
     Transform volunteer model instance into profile dictionary.
     """
+    location = volunteer.location
+    location_dict: Dict[str, Any] | None = None
+    if location is not None:
+        location_dict = {
+            "address": location.address,
+            "city": location.city,
+            "state": location.state,
+            "zip_code": location.zip_code,
+            "country": location.country,
+        }
+
     return {
         "id": volunteer.id,
         "email": volunteer.email,
         "first_name": volunteer.first_name,
         "last_name": volunteer.last_name,
+        "address": location.address if location is not None else None,
+        "city": location.city if location is not None else None,
+        "state": location.state if location is not None else None,
+        "zip_code": location.zip_code if location is not None else None,
+        "country": location.country if location is not None else None,
+        "location": location_dict,
         "skills": [s.skill for s in (volunteer.skills or [])],
         "availability": [str(a.day_of_week) for a in (volunteer.times_available or [])],
     }
