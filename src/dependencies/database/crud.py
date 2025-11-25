@@ -1,6 +1,6 @@
 from typing import Iterable, List, Dict, Any
 from datetime import datetime, date
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from ...models import dbmodels, pydanticmodels
@@ -569,3 +569,79 @@ def get_volunteer_profile_data(volunteer: dbmodels.Volunteer) -> Dict[str, Any]:
         "skills": [s.skill for s in (volunteer.skills or [])],
         "availability": [str(a.day_of_week) for a in (volunteer.times_available or [])],
     }
+
+
+def search_organizations(
+    db: Session,
+    q: str | None = None,
+    city: str | None = None,
+    state: str | None = None,
+    limit: int = 25,
+    offset: int = 0,
+) -> tuple[List[Dict[str, Any]], int]:
+    """
+    Search organizations by name/description and optional city/state filters.
+    Returns (results, total_count). Results are plain dicts suitable for JSON.
+    """
+    # build base query with optional join to location
+    base_query = select(dbmodels.Organization).outerjoin(dbmodels.Location)
+
+    conditions = []
+    if q:
+        pattern = f"%{q}%"
+        conditions.append(
+            or_(
+                dbmodels.Organization.name.ilike(pattern),
+                dbmodels.Organization.description.ilike(pattern),
+            )
+        )
+
+    if city:
+        conditions.append(dbmodels.Location.city.ilike(f"%{city}%"))
+    if state:
+        conditions.append(dbmodels.Location.state.ilike(f"%{state}%"))
+
+    if conditions:
+        query = base_query.where(*conditions)
+    else:
+        query = base_query
+
+    # total count
+    count_query = (
+        select(func.count(dbmodels.Organization.id))
+        .select_from(dbmodels.Organization)
+        .outerjoin(dbmodels.Location)
+    )
+    if conditions:
+        count_query = count_query.where(*conditions)
+
+    total = db.execute(count_query).scalar_one()
+
+    # fetch results with pagination
+    query = query.order_by(dbmodels.Organization.name).limit(limit).offset(offset)
+    orgs = db.execute(query).scalars().all()
+
+    results: List[Dict[str, Any]] = []
+    for org in orgs:
+        loc = org.location
+        location_dict = None
+        if loc is not None:
+            location_dict = {
+                "address": loc.address,
+                "city": loc.city,
+                "state": loc.state,
+                "zip_code": loc.zip_code,
+                "country": loc.country,
+            }
+
+        results.append(
+            {
+                "id": org.id,
+                "name": org.name,
+                "description": org.description,
+                "image_url": org.image_url,
+                "location": location_dict,
+            }
+        )
+
+    return results, int(total)

@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from mypy_boto3_s3 import S3Client
+from typing import List, Optional, Dict, Any
+from fastapi import Query
 from ..models.pydanticmodels import OrgCreate, OrgUpdate
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin, is_volunteer
 from ..dependencies.aws import get_s3, upload_image
@@ -12,11 +14,31 @@ from ..dependencies.database.crud import (
     update_org,
     get_current_admin,
     get_upcoming_events_by_org,
+    search_organizations,
 )
 from ..dependencies.geocoding import get_coordinates
 from ..util import error
 
 router = APIRouter(prefix="/org", tags=["org"])
+
+
+@router.get("/search")
+async def search_orgs(
+    q: Optional[str] = Query(
+        None, min_length=1, description="Search term (name or description)"
+    ),
+    city: Optional[str] = Query(None, description="Filter by city"),
+    state: Optional[str] = Query(None, description="Filter by state"),
+    limit: int = Query(25, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    results: list[dict[str, Any]] = []
+    total: int = 0
+
+    results, total = search_organizations(db, q, city, state, limit, offset)
+
+    return {"count": total, "results": results}
 
 
 @router.get("/{org_id}")
