@@ -15,6 +15,7 @@ from ..dependencies.database.crud import (
     get_current_admin,
     get_upcoming_events_by_org,
     search_organizations,
+    get_org_profile_data,
 )
 from ..dependencies.geocoding import get_coordinates
 from ..util import error
@@ -151,18 +152,18 @@ async def get_admin_profile(
         raise error.NotFoundError("admin", admin_id)
 
     # Get the organization if admin has one
-    organization = None
+    org_data = None
     upcoming_events = []
 
-    if found_admin.org_id:
-        organization = get_org_from_id(db, found_admin.org_id)
+    organization = get_org_from_id(db, found_admin.org_id)
 
-        if organization:
-            # Get upcoming events for the organization
-            upcoming_events = get_upcoming_events_by_org(db, organization.id)
+    if organization:
+        org_data = get_org_profile_data(db, organization.id)
+
+        upcoming_events = get_upcoming_events_by_org(db, organization.id)
 
     return {
         "admin": found_admin,
-        "organization": organization,
+        "organization": org_data,
         "upcoming_events": upcoming_events,
     }

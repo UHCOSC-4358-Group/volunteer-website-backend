@@ -645,3 +645,33 @@ def search_organizations(
         )
 
     return results, int(total)
+
+
+def get_org_profile_data(db: Session, org_id: int) -> Dict[str, Any]:
+    """
+    Return organization data as a serializable dict and include the location
+    (if present) in a structured form.
+    Raises NotFoundError if the organization does not exist.
+    """
+    org = db.get(dbmodels.Organization, org_id)
+    if org is None:
+        raise error.NotFoundError("organization", org_id)
+
+    loc = org.location
+    location_dict: Dict[str, Any] | None = None
+    if loc is not None:
+        location_dict = {
+            "address": loc.address,
+            "city": loc.city,
+            "state": loc.state,
+            "zip_code": loc.zip_code,
+            "country": loc.country,
+        }
+
+    return {
+        "id": org.id,
+        "name": org.name,
+        "description": org.description,
+        "image_url": org.image_url,
+        "location": location_dict,
+    }
