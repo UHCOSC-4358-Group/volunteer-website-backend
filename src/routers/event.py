@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, Body, File, Form, UploadFile
+from fastapi import APIRouter, Depends, status, Body, File, Form, UploadFile, Query
 from sqlalchemy.orm import Session
 from mypy_boto3_s3 import S3Client
 from ..models import dbmodels
@@ -21,6 +21,69 @@ from ..dependencies.geocoding import get_coordinates
 from ..util import error
 
 router = APIRouter(prefix="/events", tags=["event"])
+
+
+@router.get("/")
+async def list_upcoming_events(
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """
+    Return all upcoming events (day >= today), ordered by day and start_time.
+    """
+    from datetime import date
+
+    today = date.today()
+
+    query = (
+        db.query(dbmodels.Event)
+        .filter(dbmodels.Event.day >= today)
+        .order_by(dbmodels.Event.day, dbmodels.Event.start_time)
+        .limit(limit)
+        .offset(offset)
+    )
+
+    events = query.all()
+
+    results = []
+    for event in events:
+        location = None
+        if getattr(event, "location", None) is not None:
+            location = {
+                "address": event.location.address,
+                "city": event.location.city,
+                "state": event.location.state,
+                "zip_code": event.location.zip_code,
+                "country": event.location.country,
+            }
+
+        results.append(
+            {
+                "id": event.id,
+                "name": event.name,
+                "description": event.description,
+                "day": event.day if event.day else None,
+                "start_time": (event.start_time if event.start_time else None),
+                "end_time": event.end_time if event.end_time else None,
+                "urgency": (
+                    event.urgency.value
+                    if hasattr(event.urgency, "value")
+                    else str(event.urgency)
+                ),
+                "capacity": event.capacity,
+                "assigned": event.assigned,
+                "org_id": event.org_id,
+                "location": location,
+                "needed_skills": (
+                    [skill.skill for skill in event.needed_skills]
+                    if getattr(event, "needed_skills", None)
+                    else []
+                ),
+            }
+        )
+
+    return {"count": len(results), "results": results}
 
 
 # CRITERIA: None, anyone can retrieve event data
