@@ -113,17 +113,16 @@ async def get_admin_org_events(
     return [serialize_event(evt) for evt in events]
 
 
-@router.get("/{org_id}/report")
+@router.get("/report")
 async def get_org_volunteer_history_report(
-    org_id: int,
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
     include_header: bool = Query(True, description="Include CSV header row"),
 ):
     """
-    Stream a CSV report of volunteer history for the given organization.
+    Stream a CSV report of volunteer history for the current admin's organization.
 
-    - Admin-only: requesting user must be an admin and must belong to the organization.
+    - Admin-only: requesting user must be an org admin.
     - Uses `get_org_past_volunteers` to obtain volunteers and their past events.
     - Streams CSV using Python's built-in `csv` module.
     """
@@ -134,11 +133,11 @@ async def get_org_volunteer_history_report(
     if admin is None:
         raise error.NotFoundError("admin", user_info.user_id)
 
-    # Admin may only request reports for their own organization
-    if admin.org_id is None or admin.org_id != org_id:
-        raise error.AuthorizationError(
-            "Admin may only request report for their own organization"
-        )
+    # Admin must belong to an organization; use their org for the report
+    if admin.org_id is None:
+        raise error.AuthorizationError("Admin is not assigned to an organization")
+
+    org_id = admin.org_id
 
     past_vols = get_org_past_volunteers(db, org_id)
 
