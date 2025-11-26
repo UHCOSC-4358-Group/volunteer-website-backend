@@ -302,7 +302,7 @@ async def get_admin_org_event_matches(
     results: List[Dict[str, Any]] = []
 
     for ev in events:
-        matched = match_volunteers_to_event(db, ev.id, admin.user_id)
+        matched = match_volunteers_to_event(db, ev.id, admin.id)
 
         # shape matched volunteers: (Volunteer, score)
         matches_list: List[Dict[str, Any]] = []
