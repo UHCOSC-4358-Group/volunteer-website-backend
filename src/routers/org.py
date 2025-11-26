@@ -14,6 +14,7 @@ from ..dependencies.database.crud import (
     update_org,
     get_current_admin,
     get_upcoming_events_by_org,
+    get_notifications_for_user,
     search_organizations,
     get_org_profile_data,
 )
@@ -220,6 +221,8 @@ async def get_admin_profile(
     admin_id: int,
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
+    notifications_limit: int = Query(50, ge=1, le=200),
+    notifications_offset: int = Query(0, ge=0),
 ):
     """
     Get admin details along with their organization and upcoming events.
@@ -240,6 +243,9 @@ async def get_admin_profile(
     # Get the organization if admin has one
     org_data = None
     upcoming_events = []
+    notifications: list[dict] = []
+    nearest_event_matches: list[dict] | None = None
+    recent_volunteers: list[dict] = []
 
     organization = get_org_from_id(db, found_admin.org_id)
 
@@ -248,10 +254,88 @@ async def get_admin_profile(
 
         upcoming_events = get_upcoming_events_by_org(db, organization.id)
 
+        # Notifications for this admin
+        raw_notes = get_notifications_for_user(
+            db,
+            found_admin.id,
+            "admin",
+            limit=notifications_limit,
+            offset=notifications_offset,
+        )
+
+        # serialize notifications to NotificationOut-like dict
+        notifications = [
+            {
+                "id": n.id,
+                "subject": n.subject,
+                "body": n.body,
+                "created_at": n.created_at,
+                "recipient_id": found_admin.id,
+                "recipient_type": "admin",
+            }
+            for n in raw_notes
+        ]
+
+        # Compute minified matches for the nearest upcoming event (if any)
+        if upcoming_events:
+            # get the first upcoming event (sorted by day/start_time in CRUD)
+            nearest = upcoming_events[0]
+
+            # match_volunteers_to_event returns (Volunteer, score) rows
+            matched = match_volunteers_to_event(db, nearest.id, found_admin.id)
+
+            # minified: id, first_name, last_name, score
+            match_top_k = 5
+            nearest_event_matches = []
+            for vol, score in matched[:match_top_k]:
+                nearest_event_matches.append(
+                    {
+                        "volunteer_id": vol.id,
+                        "first_name": vol.first_name,
+                        "last_name": vol.last_name,
+                        "score": float(score),
+                    }
+                )
+
+        # Build list of volunteers most recently attended an org event (limit 5)
+        past_vols = get_org_past_volunteers(db, organization.id)
+
+        # Each item in past_vols has 'volunteer' and 'past_events' (ordered newest-first)
+        # Compute most recent event datetime per volunteer and sort
+        def last_event_key(item):
+            evs = item.get("past_events") or []
+            if not evs:
+                return None
+            # day is string; use as-is for sorting (ISO-like), prefer day then start_time
+            last = evs[0]
+            # combine day and start_time for fine ordering; fall back
+            return (last.get("day"), last.get("start_time") or "")
+
+        # filter those with at least one past event
+        with_events = [p for p in past_vols if p.get("past_events")]
+        # sort descending by last event
+        with_events.sort(key=lambda it: last_event_key(it) or ("", ""), reverse=True)
+
+        for p in with_events[:5]:
+            vol = p.get("volunteer") or {}
+            last_ev = (p.get("past_events") or [None])[0]
+            recent_volunteers.append(
+                {
+                    "id": vol.get("id"),
+                    "first_name": vol.get("first_name"),
+                    "last_name": vol.get("last_name"),
+                    "email": vol.get("email"),
+                    "last_event": last_ev,
+                }
+            )
+
     return {
         "admin": found_admin,
         "organization": org_data,
         "upcoming_events": upcoming_events,
+        "notifications": notifications,
+        "nearest_event_matches": nearest_event_matches,
+        "recent_volunteers": recent_volunteers,
     }
 
 
