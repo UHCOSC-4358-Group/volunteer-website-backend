@@ -1,4 +1,7 @@
 from fastapi import APIRouter, Depends, status, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
+import io
+import csv
 from sqlalchemy.orm import Session
 from mypy_boto3_s3 import S3Client
 from typing import List, Optional, Dict, Any, Literal
@@ -108,6 +111,134 @@ async def get_admin_org_events(
         }
 
     return [serialize_event(evt) for evt in events]
+
+
+@router.get("/{org_id}/report")
+async def get_org_volunteer_history_report(
+    org_id: int,
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    include_header: bool = Query(True, description="Include CSV header row"),
+):
+    """
+    Stream a CSV report of volunteer history for the given organization.
+
+    - Admin-only: requesting user must be an admin and must belong to the organization.
+    - Uses `get_org_past_volunteers` to obtain volunteers and their past events.
+    - Streams CSV using Python's built-in `csv` module.
+    """
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
+
+    admin = get_current_admin(db, user_info.user_id)
+    if admin is None:
+        raise error.NotFoundError("admin", user_info.user_id)
+
+    # Admin may only request reports for their own organization
+    if admin.org_id is None or admin.org_id != org_id:
+        raise error.AuthorizationError(
+            "Admin may only request report for their own organization"
+        )
+
+    past_vols = get_org_past_volunteers(db, org_id)
+
+    # CSV column header
+    header = [
+        "volunteer_id",
+        "first_name",
+        "last_name",
+        "email",
+        "event_id",
+        "event_name",
+        "event_day",
+        "start_time",
+        "end_time",
+        "hours",
+        "event_description",
+        "event_skills",
+        "location_address",
+        "location_city",
+        "location_state",
+        "location_zip",
+        "location_country",
+    ]
+
+    def generate():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+
+        if include_header:
+            writer.writerow(header)
+            yield buf.getvalue()
+            buf.seek(0)
+            buf.truncate(0)
+
+        for item in past_vols:
+            vol = item.get("volunteer", {}) or {}
+            events = item.get("past_events", []) or []
+            # If volunteer has no events, still output a row with event columns empty
+            if not events:
+                writer.writerow(
+                    [
+                        vol.get("id"),
+                        vol.get("first_name"),
+                        vol.get("last_name"),
+                        vol.get("email"),
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                        None,
+                    ]
+                )
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate(0)
+                continue
+
+            for ev in events:
+                skills = ev.get("skills") or []
+                loc = ev.get("location") or {}
+                writer.writerow(
+                    [
+                        vol.get("id"),
+                        vol.get("first_name"),
+                        vol.get("last_name"),
+                        vol.get("email"),
+                        ev.get("event_id"),
+                        ev.get("name"),
+                        ev.get("day"),
+                        ev.get("start_time"),
+                        ev.get("end_time"),
+                        ev.get("hours"),
+                        ev.get("description"),
+                        ";".join(map(str, skills)),
+                        loc.get("address"),
+                        loc.get("city"),
+                        loc.get("state"),
+                        loc.get("zip_code"),
+                        loc.get("country"),
+                    ]
+                )
+                yield buf.getvalue()
+                buf.seek(0)
+                buf.truncate(0)
+
+    filename = f"org_{org_id}_volunteer_history.csv"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.get("/search")
