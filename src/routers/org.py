@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status, UploadFile, File, Form
 from sqlalchemy.orm import Session
 from mypy_boto3_s3 import S3Client
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from fastapi import Query
 from ..models.pydanticmodels import OrgCreate, OrgUpdate
 from ..dependencies.auth import get_current_user, UserTokenInfo, is_admin, is_volunteer
@@ -282,6 +282,10 @@ async def get_admin_org_event_matches(
     user_info: UserTokenInfo = Depends(get_current_user),
     db: Session = Depends(get_db),
     top_k: int = Query(10, ge=1, le=100),
+    max_distance: float = Query(25.0, ge=0.0, description="Max search radius"),
+    distance_unit: Literal["km", "mile"] = Query(
+        "mile", description="Distance unit: 'km' or 'mile'"
+    ),
 ):
     """
     For the authenticated admin, run volunteer matching for every upcoming
@@ -302,7 +306,9 @@ async def get_admin_org_event_matches(
     results: List[Dict[str, Any]] = []
 
     for ev in events:
-        matched = match_volunteers_to_event(db, ev.id, admin.id)
+        matched = match_volunteers_to_event(
+            db, ev.id, admin.id, max_distance=max_distance, distance_unit=distance_unit
+        )
 
         # shape matched volunteers: (Volunteer, score)
         matches_list: List[Dict[str, Any]] = []
