@@ -252,7 +252,8 @@ async def get_admin_profile(
     if organization:
         org_data = get_org_profile_data(db, organization.id)
 
-        upcoming_events = get_upcoming_events_by_org(db, organization.id)
+        # Get upcoming events as model instances (for matching), we'll serialize later
+        upcoming_event_models = get_upcoming_events_by_org(db, organization.id)
 
         # Notifications for this admin
         raw_notes = get_notifications_for_user(
@@ -277,9 +278,9 @@ async def get_admin_profile(
         ]
 
         # Compute minified matches for the nearest upcoming event (if any)
-        if upcoming_events:
+        if upcoming_event_models:
             # get the first upcoming event (sorted by day/start_time in CRUD)
-            nearest = upcoming_events[0]
+            nearest = upcoming_event_models[0]
 
             # match_volunteers_to_event returns (Volunteer, score) rows
             matched = match_volunteers_to_event(db, nearest.id, found_admin.id)
@@ -329,8 +330,57 @@ async def get_admin_profile(
                 }
             )
 
+        # Serialize upcoming events (use same shape as /events endpoint)
+        def serialize_event(event):
+            location = None
+            if getattr(event, "location", None) is not None:
+                location = {
+                    "address": event.location.address,
+                    "city": event.location.city,
+                    "state": event.location.state,
+                    "zip_code": event.location.zip_code,
+                    "country": event.location.country,
+                }
+
+            return {
+                "id": event.id,
+                "name": event.name,
+                "description": event.description,
+                "day": event.day.isoformat() if event.day else None,
+                "start_time": (
+                    event.start_time.isoformat() if event.start_time else None
+                ),
+                "end_time": event.end_time.isoformat() if event.end_time else None,
+                "urgency": (
+                    event.urgency.value
+                    if hasattr(event, "urgency") and hasattr(event.urgency, "value")
+                    else str(event.urgency)
+                ),
+                "capacity": event.capacity,
+                "assigned": event.assigned,
+                "org_id": event.org_id,
+                "location": location,
+                "needed_skills": (
+                    [skill.skill for skill in event.needed_skills]
+                    if getattr(event, "needed_skills", None)
+                    else []
+                ),
+            }
+
+        upcoming_events = [serialize_event(evt) for evt in upcoming_event_models]
+
+    # Serialize admin to avoid returning SQLAlchemy model (and embedded WKBElement)
+    admin_out = {
+        "id": found_admin.id,
+        "email": found_admin.email,
+        "first_name": getattr(found_admin, "first_name", None),
+        "last_name": getattr(found_admin, "last_name", None),
+        "description": getattr(found_admin, "description", None),
+        "org_id": getattr(found_admin, "org_id", None),
+    }
+
     return {
-        "admin": found_admin,
+        "admin": admin_out,
         "organization": org_data,
         "upcoming_events": upcoming_events,
         "notifications": notifications,
