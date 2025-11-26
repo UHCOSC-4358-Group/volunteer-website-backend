@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, model_validator, EmailStr
 from enum import Enum
 from datetime import datetime, time, date
+from typing import Literal
 
 # === Location Models ===
 
@@ -71,6 +72,22 @@ class Notification(BaseModel):
     type: NotificationType
     text: str = Field(min_length=5, max_length=200)
     time: datetime
+
+
+class NotificationCreate(BaseModel):
+    subject: str = Field(min_length=1, max_length=200)
+    body: str = Field(min_length=1, max_length=2000)
+    recipient_id: int
+    recipient_type: Literal["volunteer", "admin"]
+
+
+class NotificationOut(BaseModel):
+    id: int
+    subject: str
+    body: str
+    created_at: datetime
+    recipient_id: int
+    recipient_type: Literal["volunteer", "admin"]
 
 
 # This one is for creating events, so POST /:orgId/events

@@ -9,7 +9,7 @@ from .util.logging_config import setup_logging
 load_dotenv(dotenv_path=find_dotenv())
 
 # Routers
-from .routers import auth, event, org, volunteer
+from .routers import auth, event, org, volunteer, notifications
 
 
 setup_logging(log_level="INFO", log_file="errors.log")
@@ -53,6 +53,9 @@ app.include_router(org.router)
 
 # /volunteer
 app.include_router(volunteer.router)
+
+# /notifications
+app.include_router(notifications.router)
 
 
 # All sign up methods should return a id, making it

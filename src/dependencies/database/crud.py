@@ -1,4 +1,4 @@
-from typing import Iterable, List, Dict, Any
+from typing import Iterable, List, Dict, Any, Sequence
 from datetime import datetime, date
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Session
@@ -675,3 +675,64 @@ def get_org_profile_data(db: Session, org_id: int) -> Dict[str, Any]:
         "image_url": org.image_url,
         "location": location_dict,
     }
+
+
+def create_notification(
+    db: Session, new_note: pydanticmodels.NotificationCreate
+) -> dbmodels.Notification:
+    """
+    Create a notification and attach it to the specified recipient (volunteer or admin).
+    """
+
+    # validate recipient exists
+    rid = new_note.recipient_id
+    if new_note.recipient_type == "volunteer":
+        found = db.get(dbmodels.Volunteer, rid)
+        if found is None:
+            raise error.NotFoundError("volunteer", rid)
+        notif = dbmodels.Notification(
+            subject=new_note.subject,
+            body=new_note.body,
+            recipient_volunteer_id=rid,
+        )
+    else:
+        # admin
+        found = db.get(dbmodels.OrgAdmin, rid)
+        if found is None:
+            raise error.NotFoundError("admin", rid)
+        notif = dbmodels.Notification(
+            subject=new_note.subject,
+            body=new_note.body,
+            recipient_admin_id=rid,
+        )
+
+    db.add(notif)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise error.DatabaseOperationError("create_notification", str(exc))
+    db.refresh(notif)
+    return notif
+
+
+def get_notifications_for_user(
+    db: Session, user_id: int, user_type: str, limit: int = 50, offset: int = 0
+) -> Sequence[dbmodels.Notification]:
+    """
+    Return notifications for a given user (volunteer or admin), newest first.
+    """
+    query = select(dbmodels.Notification)
+    if user_type == "volunteer":
+        query = query.where(dbmodels.Notification.recipient_volunteer_id == user_id)
+    else:
+        query = query.where(dbmodels.Notification.recipient_admin_id == user_id)
+
+    query = (
+        query.order_by(dbmodels.Notification.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+    )
+
+    results = db.execute(query).scalars().all()
+    return results

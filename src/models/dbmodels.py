@@ -291,3 +291,48 @@ class EventVolunteer(Base):
     # Many-to-one: EventVolunteer -> (Volunteer, Event)
     volunteer: Mapped["Volunteer"] = relationship(back_populates="events")
     event: Mapped["Event"] = relationship(back_populates="volunteers")
+
+
+class Notification(Base):
+    __tablename__ = "notification"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    # Recipient foreign keys: only one of these should be non-null
+    recipient_volunteer_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("volunteer.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    recipient_admin_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("organization_admin.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
+
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        server_default="NOW()",
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.now(timezone.utc),
+        onupdate=datetime.now(timezone.utc),
+        server_default="NOW()",
+        nullable=False,
+    )
+
+    # Optional relationships for convenient access
+    recipient_volunteer: Mapped[Optional["Volunteer"]] = relationship(
+        "Volunteer",
+        primaryjoin="Volunteer.id==Notification.recipient_volunteer_id",
+        viewonly=True,
+    )
+    recipient_admin: Mapped[Optional["OrgAdmin"]] = relationship(
+        "OrgAdmin",
+        primaryjoin="OrgAdmin.id==Notification.recipient_admin_id",
+        viewonly=True,
+    )
