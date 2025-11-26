@@ -20,6 +20,7 @@ from ..dependencies.database.crud import (
 from ..dependencies.geocoding import get_coordinates
 from ..util import error
 from ..dependencies.database.relations import signup_org_admin
+from ..dependencies.database.relations import get_org_past_volunteers
 
 router = APIRouter(prefix="/org", tags=["org"])
 
@@ -247,3 +248,28 @@ def signup_current_admin_to_org(
         "org_id": org_id,
         "admin_id": admin_id,
     }
+
+
+
+@router.get("/past-volunteers")
+async def get_admin_org_past_volunteers(
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Return all volunteers who have worked past events for the authenticated admin's organization,
+    including the events they worked and the computed hours for each event.
+    """
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
+
+    admin = get_current_admin(db, user_info.user_id)
+    if admin is None:
+        raise error.NotFoundError("admin", user_info.user_id)
+
+    if admin.org_id is None:
+        return []
+
+    results = get_org_past_volunteers(db, admin.org_id)
+
+    return results

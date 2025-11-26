@@ -344,3 +344,106 @@ def get_volunteer_history(db: Session, volunteer_id: int) -> List[Dict[str, Any]
         )
 
     return past_events
+
+
+def get_org_past_volunteers(db: Session, org_id: int) -> List[Dict[str, Any]]:
+    """
+    Return all volunteers who participated in past events for the given organization.
+    Each volunteer dict includes volunteer info and a list of past events they worked,
+    with computed hours for each event when start/end times are present.
+    """
+    # predicate for past events (same logic as get_volunteer_history)
+    past_event_predicate = or_(
+        dbmodels.Event.day < func.current_date(),
+        and_(
+            dbmodels.Event.day == func.current_date(),
+            dbmodels.Event.end_time < func.current_time(),
+        ),
+    )
+
+    # find distinct volunteers who have EventVolunteer rows for past events of the org
+    query = (
+        select(dbmodels.Volunteer)
+        .join(
+            dbmodels.EventVolunteer,
+            dbmodels.Volunteer.id == dbmodels.EventVolunteer.volunteer_id,
+        )
+        .join(dbmodels.Event, dbmodels.Event.id == dbmodels.EventVolunteer.event_id)
+        .where(dbmodels.Event.org_id == org_id)
+        .where(past_event_predicate)
+        .distinct()
+    )
+
+    volunteers = db.execute(query).scalars().all()
+
+    results: List[Dict[str, Any]] = []
+
+    for vol in volunteers:
+        # fetch the volunteer's past assignments for this org
+        assignments = (
+            db.query(dbmodels.EventVolunteer, dbmodels.Event)
+            .join(dbmodels.Event, dbmodels.EventVolunteer.event_id == dbmodels.Event.id)
+            .filter(
+                dbmodels.EventVolunteer.volunteer_id == vol.id,
+                dbmodels.Event.org_id == org_id,
+                past_event_predicate,
+            )
+            .order_by(dbmodels.Event.day.desc(), dbmodels.Event.end_time.desc())
+            .all()
+        )
+
+        event_list: List[Dict[str, Any]] = []
+        for ev_assignment, ev in assignments:
+            # compute hours if start_time and end_time present
+            hours: float | None = None
+            if (
+                ev.start_time is not None
+                and ev.end_time is not None
+                and ev.day is not None
+            ):
+                try:
+                    # combine with the event day to get datetimes for subtraction
+                    start_dt = datetime.combine(ev.day, ev.start_time)
+                    end_dt = datetime.combine(ev.day, ev.end_time)
+                    delta = end_dt - start_dt
+                    hours = round(delta.total_seconds() / 3600.0, 2)
+                except Exception:
+                    hours = None
+
+            location: Dict[str, Any] = {}
+            if ev.location is not None:
+                location = {
+                    "address": ev.location.address,
+                    "city": ev.location.city,
+                    "state": ev.location.state,
+                    "country": ev.location.country,
+                    "zip_code": ev.location.zip_code,
+                }
+
+            event_list.append(
+                {
+                    "event_id": ev.id,
+                    "description": ev.description,
+                    "skills": [skill.skill for skill in (ev.needed_skills or [])],
+                    "name": ev.name,
+                    "day": str(ev.day) if ev.day else None,
+                    "start_time": (str(ev.start_time) if ev.start_time else None),
+                    "end_time": (str(ev.end_time) if ev.end_time else None),
+                    "hours": hours,
+                    "location": location,
+                }
+            )
+
+        results.append(
+            {
+                "volunteer": {
+                    "id": vol.id,
+                    "first_name": vol.first_name,
+                    "last_name": vol.last_name,
+                    "email": vol.email,
+                },
+                "past_events": event_list,
+            }
+        )
+
+    return results
