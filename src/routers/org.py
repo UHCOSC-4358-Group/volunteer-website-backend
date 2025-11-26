@@ -19,8 +19,11 @@ from ..dependencies.database.crud import (
 )
 from ..dependencies.geocoding import get_coordinates
 from ..util import error
-from ..dependencies.database.relations import signup_org_admin
-from ..dependencies.database.relations import get_org_past_volunteers
+from ..dependencies.database.relations import (
+    signup_org_admin,
+    get_org_past_volunteers,
+    match_volunteers_to_event,
+)
 
 router = APIRouter(prefix="/org", tags=["org"])
 
@@ -272,3 +275,57 @@ def signup_current_admin_to_org(
         "org_id": org_id,
         "admin_id": admin_id,
     }
+
+
+@router.get("/events/match")
+async def get_admin_org_event_matches(
+    user_info: UserTokenInfo = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    top_k: int = Query(10, ge=1, le=100),
+):
+    """
+    For the authenticated admin, run volunteer matching for every upcoming
+    event in their organization and return the top matches per event.
+    """
+    if not is_admin(user_info):
+        raise error.AuthorizationError("User is not an admin")
+
+    admin = get_current_admin(db, user_info.user_id)
+    if admin is None:
+        raise error.NotFoundError("admin", user_info.user_id)
+
+    if admin.org_id is None:
+        return []
+
+    events = get_upcoming_events_by_org(db, admin.org_id)
+
+    results: List[Dict[str, Any]] = []
+
+    for ev in events:
+        matched = match_volunteers_to_event(db, ev.id, admin.user_id)
+
+        # shape matched volunteers: (Volunteer, score)
+        matches_list: List[Dict[str, Any]] = []
+        for vol, score in matched[:top_k]:
+            matches_list.append(
+                {
+                    "volunteer_id": vol.id,
+                    "first_name": vol.first_name,
+                    "last_name": vol.last_name,
+                    "email": vol.email,
+                    "score": float(score),
+                }
+            )
+
+        results.append(
+            {
+                "event_id": ev.id,
+                "name": ev.name,
+                "day": ev.day if ev.day else None,
+                "start_time": ev.start_time if ev.start_time else None,
+                "end_time": ev.end_time if ev.end_time else None,
+                "matches": matches_list,
+            }
+        )
+
+    return {"org_id": admin.org_id, "count": len(results), "results": results}
