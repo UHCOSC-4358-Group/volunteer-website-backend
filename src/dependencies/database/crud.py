@@ -133,7 +133,7 @@ def create_org_admin(
 ):
 
     # check for exisitng email
-    query = select(dbmodels.Volunteer).where(dbmodels.OrgAdmin.email == new_admin.email)
+    query = select(dbmodels.OrgAdmin).where(dbmodels.OrgAdmin.email == new_admin.email)
 
     existing_admin = db.execute(query).scalar_one_or_none()
 
