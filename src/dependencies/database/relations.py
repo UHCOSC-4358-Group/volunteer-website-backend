@@ -132,6 +132,11 @@ def match_volunteers_to_event(
     if found_event is None:
         raise error.NotFoundError("event", event_id)
 
+    # If the event has no location, we cannot compute distance-based matches.
+    # Return an empty list so callers can handle "no matches" gracefully.
+    if found_event.location is None:
+        return []
+
     SKILLS_MAX = 2
     LOCATION_MAX = 4
     SCHEDULE_MAX = 4
