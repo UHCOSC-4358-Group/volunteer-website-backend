@@ -293,13 +293,8 @@ def get_volunteer_history(db: Session, volunteer_id: int) -> List[Dict[str, Any]
     Uses PostgreSQL's CURRENT_DATE and CURRENT_TIME for server-side filtering.
     Returns events ordered by most recent first.
     """
-    past_event_predicate = or_(
-        dbmodels.Event.day < func.current_date(),
-        and_(
-            dbmodels.Event.day == func.current_date(),
-            dbmodels.Event.end_time < func.current_time(),
-        ),
-    )
+    # Classify past events by day only: events with day < CURRENT_DATE
+    past_event_predicate = dbmodels.Event.day < func.current_date()
 
     query = (
         select(dbmodels.Event)

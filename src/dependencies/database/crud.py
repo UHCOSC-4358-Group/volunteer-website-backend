@@ -498,17 +498,21 @@ def get_volunteer_upcoming_events(
     db: Session, volunteer_id: int
 ) -> List[Dict[str, Any]]:
     """
-    Get all upcoming events for a volunteer (today or future dates).
+    Get all upcoming events for a volunteer.
+    Uses server-side CURRENT_DATE/CURRENT_TIME to exclude events that already
+    ended earlier today so upcoming and past events are disjoint.
     Returns list of event dictionaries.
     """
 
-    today = date.today()
+    # Classify upcoming events by day only: events with day >= CURRENT_DATE
+    upcoming_predicate = dbmodels.Event.day >= func.current_date()
+
     upcoming_assignments = (
         db.query(dbmodels.EventVolunteer, dbmodels.Event)
         .join(dbmodels.Event, dbmodels.EventVolunteer.event_id == dbmodels.Event.id)
         .filter(
             dbmodels.EventVolunteer.volunteer_id == volunteer_id,
-            dbmodels.Event.day >= today,
+            upcoming_predicate,
         )
         .order_by(dbmodels.Event.day.asc(), dbmodels.Event.start_time.asc())
         .all()
