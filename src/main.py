@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, find_dotenv
@@ -31,7 +32,7 @@ origins = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
-    "https://your-frontend-domain.com",
+    "https://volunteer-website-39e.web.app/",
 ]
 
 app.add_middleware(
@@ -61,14 +62,11 @@ app.include_router(notifications.router)
 # All sign up methods should return a id, making it
 
 
-@app.get("/vol")
-async def all_volunteers():
-    return ["N/A"]
-
-
 @app.get("/")
 async def root():
-    return {"message": "Welcome to Volunteer Website API"}
+    return {
+        "message": "Welcome to Volunteer Website API. Go to /docs for API documentation."
+    }
 
 
 @app.get("/health")
