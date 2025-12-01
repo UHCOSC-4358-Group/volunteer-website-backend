@@ -39,7 +39,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/vol/signup", status_code=status.HTTP_201_CREATED)
 async def volunteer_signup(
-    response: Response,
     vol_data: str = Form(),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
@@ -61,9 +60,11 @@ async def volunteer_signup(
 
     volunteer_obj = create_volunteer(db, vol, image_url, latlong)
 
-    sign_JWT_volunteer(volunteer_obj.id, response)
+    token = sign_JWT_volunteer(volunteer_obj.id)
 
-    return volunteer_obj
+    response = {"user_info": volunteer_obj, "token": token}
+
+    return response
 
 
 class LoginData(BaseModel):
@@ -72,9 +73,7 @@ class LoginData(BaseModel):
 
 
 @router.post("/vol/login")
-async def volunteer_login(
-    login_data: LoginData, response: Response, db: Session = Depends(get_db)
-):
+async def volunteer_login(login_data: LoginData, db: Session = Depends(get_db)):
     found_volunteer = get_volunteer_login(db, login_data.email)
 
     if found_volunteer is None:
@@ -83,14 +82,15 @@ async def volunteer_login(
     if not verify_password(login_data.password, found_volunteer.password):
         raise error.AuthenticationError("User or password incorrect")
 
-    sign_JWT_volunteer(found_volunteer.id, response)
+    token = sign_JWT_volunteer(found_volunteer.id)
 
-    return found_volunteer
+    response = {"user_info": found_volunteer, "token": token}
+
+    return response
 
 
 @router.post("/org/signup", status_code=status.HTTP_201_CREATED)
 async def admin_signup(
-    response: Response,
     admin_data: str = Form(...),
     image: UploadFile | None = File(default=None),
     db: Session = Depends(get_db),
@@ -102,15 +102,18 @@ async def admin_signup(
         image_url = upload_image(s3, image)
 
     admin.password = hash_password(admin.password)
+
     admin_obj = create_org_admin(db, admin, image_url)
-    sign_JWT_admin(admin_obj.id, response)
-    return admin_obj
+
+    token = sign_JWT_admin(admin_obj.id)
+
+    response = {"user_info": admin_obj, "token": token}
+
+    return response
 
 
 @router.post("/org/login")
-async def admin_login(
-    login_data: LoginData, response: Response, db: Session = Depends(get_db)
-):
+async def admin_login(login_data: LoginData, db: Session = Depends(get_db)):
     found_admin = get_admin_login(db, login_data.email)
 
     # Let's just throw the same error so it's harder to hack the system
@@ -123,9 +126,11 @@ async def admin_login(
     # Delete password so it isn't passed along
     # del found_admin.password
 
-    sign_JWT_admin(found_admin.id, response)
+    token = sign_JWT_admin(found_admin.id)
 
-    return found_admin
+    response = {"user_info": found_admin, "token": token}
+
+    return response
 
 
 @router.get("/vol")
