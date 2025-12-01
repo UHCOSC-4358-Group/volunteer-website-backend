@@ -12,7 +12,7 @@ Should we handle refreshing? idk
 
 from bcrypt import hashpw, gensalt, checkpw
 from pydantic import BaseModel
-from fastapi import Request, Response, Depends
+from fastapi import Request, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Dict
 import os
@@ -22,7 +22,6 @@ from ..util import error
 
 
 JWT_SECRET = os.environ.get("JWT_SECRET")
-STAGING = os.environ.get("STAGING")
 ALGORITHMS = ["HS256"]
 SALT_ROUNDS = 12
 
@@ -40,45 +39,25 @@ def verify_password(plaintext_pw: str, hashed_pw: str) -> bool:
 
 
 # Signs the JWT string
-def sign_JWT_admin(userId: int, response: Response):
+def sign_JWT_admin(userId: int):
 
     payload = {"userId": userId, "exp": time.time() + 3600, "userType": "admin"}
-    if JWT_SECRET is None or STAGING is None:
+    if JWT_SECRET is None:
         raise error.ExternalServiceError(
             "Auth", "Environment credentials are not loaded"
         )
-    staging = STAGING == "true"
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
-    response.set_cookie(
-        "access_token",
-        token,
-        httponly=True,
-        max_age=3600,
-        path="/",
-        samesite="none",
-        secure=staging,
-    )
-    return response
+    return token
 
 
-def sign_JWT_volunteer(userId: int, response: Response):
+def sign_JWT_volunteer(userId: int):
     payload = {"userId": userId, "exp": time.time() + 3600, "userType": "volunteer"}
-    if JWT_SECRET is None or STAGING is None:
+    if JWT_SECRET is None:
         raise error.ExternalServiceError(
             "Auth", "Environment credentials are not loaded"
         )
-    staging = STAGING == "true"
     token = jwt.encode(payload, JWT_SECRET, algorithm=ALGORITHMS[0])
-    response.set_cookie(
-        "access_token",
-        token,
-        httponly=True,
-        max_age=3600,
-        path="/",
-        samesite="none",
-        secure=staging,
-    )
-    return response
+    return token
 
 
 def decodeJWT(token: str):
@@ -94,28 +73,36 @@ def decodeJWT(token: str):
     except jwt.InvalidTokenError:
         raise error.AuthenticationError("Token has incorrect signature")
     except Exception as e:
-        raise error.AuthenticationError("Token validation failed")
+        raise error.AuthenticationError("Token validation failed" + str(e))
 
 
 class JWTBearer(HTTPBearer):
-    def __init__(self, auto_Error: bool = False):
-        super(JWTBearer, self).__init__(auto_error=auto_Error)
+    def __init__(self, auto_error: bool = False):
+        super(JWTBearer, self).__init__(auto_error=auto_error)
 
     async def __call__(self, request: Request) -> str | None:
 
-        token = request.cookies.get("access_token")
-        if not token:
-            credentials: HTTPAuthorizationCredentials | None = await super(
-                JWTBearer, self
-            ).__call__(request)
+        token = None
 
-            if credentials and credentials.scheme == "Bearer":
-                token = credentials.credentials
+        credentials: HTTPAuthorizationCredentials | None = await super(
+            JWTBearer, self
+        ).__call__(request)
+
+        if credentials and credentials.scheme == "Bearer":
+            token = credentials.credentials
 
         if not token:
             raise error.AuthenticationError("No authentication token provided")
 
         payload = decodeJWT(token)
+
+        expiry: float | None = payload.get("exp")
+
+        if expiry is None:
+            raise error.AuthenticationError("Token malformed on request")
+
+        if expiry < time.time():
+            raise error.AuthenticationError("Token expired")
 
         return payload
 

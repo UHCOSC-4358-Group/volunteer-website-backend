@@ -1,5 +1,4 @@
 from fastapi import FastAPI
-from fastapi.responses import RedirectResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv, find_dotenv
