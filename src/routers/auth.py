@@ -173,9 +173,3 @@ async def get_user(
         return await get_admin(user_info, db)
     else:
         raise error.AuthorizationError("Type of user not recognized")
-
-
-@router.post("/logout")
-async def logout(response: Response):
-    response.delete_cookie("access_token")
-    return {"message": "Successfully logged out!"}
